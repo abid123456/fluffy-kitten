@@ -43,54 +43,53 @@ int main(int argc, char *argv[])
 
 void ftfield(struct tfield *tf)
 {
-    short rx, ry; /* cursor coordinates in tf                 */
-    short maxy;   /* highest used y-coordinate                */
-    short eocp;   /* y-coordinate of end of current paragraph */
-    short n;      /* used to determine newline presence       */
+    short  rx, ry;  /* cursor coordinates in tf                 */
+    short  eocp;    /* y-coordinate of end of current paragraph */
+    short  n;       /* used to determine newline presence       */
+    short  maxy;    /* highest used y-coordinate                */
     
     short *len;     /* lengths of lines                               */
     char  *changed; /* whether lines has changed and must be rendered */
     
-    char *cpybuf;  /* string buffer  */
-    char *pbuf;    /* pointer buffer */
-    #ifdef DEBUG
-    char *b2strb;
-    #endif
+    char  *cpybuf;  /* string buffer  */
+    char  *pbuf;    /* pointer buffer */
     
     int i, i2, postrx;
     key k;
     
     /* init some variables */
-    n = tf -> width + 1;
     rx = ry = 0;
-    pbuf = NULL;
-    cpybuf = calloc(tf -> width + 1, sizeof *cpybuf);
+    eocp    = 0;
+    n       = tf -> width + 1;
+    
+    len     = calloc(tf -> lc, sizeof *len);
     changed = calloc(tf -> lc, sizeof *changed);
     
+    cpybuf  = calloc(tf -> width + 1, sizeof *cpybuf);
+    pbuf    = NULL;
+    
     /* init length array */
-    len = malloc(tf -> lc * sizeof *len);
-    for (i = 0; i < tf -> lc; i++) len[i] = strlen(tf -> line[i]);
-    for (i = 0; i < tf -> lc; i++)
+    for (i = 0; i < tf -> lc; i++) {
+        len[i] = strlen(tf -> line[i]);
         if (!len[i] && !tf -> line[i][n]) {
             maxy = i ? i - 1 : 0;
             break;
         }
-    
-    /* init eocp variable */
-    for (eocp = 0; eocp < maxy; eocp++)
-        if (tf -> line[eocp][n]) break;
+    }
     
     /* main loop */
-    while (-1) { 
+    while (-1) {
         /* adjust eocp */
         while (eocp < maxy && !tf -> line[eocp][n]) eocp++;
         
         /* update display */
         s_mvcur(c(tf -> linepos[ry].x + rx, tf -> linepos[ry].y));
-        for (i = 0; i < tf -> lc; i++) if (changed[i]) {
-            dltfield(*tf, i);
-            changed[i] = 0;
-        }
+        for (i = 0; i < tf -> lc; i++)
+            if (changed[i]) {
+                dltfield(*tf, i);
+                changed[i] = 0;
+            }
+        
         
         /* main switch */
         switch ((k = s_read_key()).spc) {
