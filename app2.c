@@ -80,7 +80,7 @@ void ftfield(struct tfield *tf)
     /* main loop */
     while (-1) {
         /* adjust eocp */
-        while (eocp < maxy && !tf -> line[eocp][n]) eocp++;
+        while (eocp != maxy && !tf -> line[eocp][n]) eocp++;
         
         /* update display */
         s_mvcur(c(tf -> linepos[ry].x + rx, tf -> linepos[ry].y));
@@ -127,7 +127,7 @@ void ftfield(struct tfield *tf)
             len[eocp]++;
             for (i = ry; i <= eocp; i++) changed[i] = 1;
         case SPC_RIGHT:
-            if (rx < len[ry] && (rx < tf -> width - 1 || ry == eocp)) {
+            if (rx < len[ry] && (ry == eocp || rx < tf -> width - 1)) {
                 rx++;
                 break;
             }
@@ -135,7 +135,7 @@ void ftfield(struct tfield *tf)
             if (ry == maxy) break;
             if (k.spc == SPC_RIGHT) rx = 0;
             if (tf -> line[ry++][n]) eocp++;
-            rx = len[ry];
+            if (rx > len[ry]) rx = len[ry];
             goto adjust_rx;
         case SPC_UP:
             if (!ry) break;
@@ -152,7 +152,7 @@ void ftfield(struct tfield *tf)
         case SPC_END:
             rx = len[ry];
         adjust_rx:
-            if (tf -> line[ry][n] && rx == tf -> width) rx--;
+            if (rx == tf -> width && !tf -> line[ry][n] && ry != maxy) rx--;
         check_key:
             if (k.spc != SPC_BACK) break;
         case SPC_DEL:
