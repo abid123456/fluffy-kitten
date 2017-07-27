@@ -84,12 +84,12 @@ void ftfield(struct tfield *tf)
         
         /* update display */
         s_mvcur(c(tf -> linepos[ry].x + rx, tf -> linepos[ry].y));
-        for (i = 0; i < tf -> lc; i++)
+        for (i = 0; i < tf -> lc; i++) {
             if (changed[i]) {
                 dltfield(*tf, i);
                 changed[i] = 0;
             }
-        
+        }
         
         /* main switch */
         switch ((k = s_read_key()).spc) {
@@ -113,16 +113,15 @@ void ftfield(struct tfield *tf)
                 for (i = len[eocp]; i; i--)
                     tf -> line[eocp][i] = tf -> line[eocp][i - 1];
                 tf -> line[eocp][0] = tf -> line[eocp - 1][tf -> width - 1];
-                for (i = eocp - 1; i > ry; i--) {
-                    for (i2 = tf -> width - 1; i2; i2--)
-                        tf -> line[i][i2] = tf -> line[i][i2 - 1];
-                    tf -> line[i][0] = tf -> line[i - 1][tf -> width - 1];
+                for (i2 = eocp - 1; i2 > ry; i2--) {
+                    for (i = tf -> width - 1; i; i--)
+                        tf -> line[i2][i] = tf -> line[i2][i - 1];
+                    tf -> line[i2][0] = tf -> line[i2 - 1][tf -> width - 1];
                 }
-                for (i = tf -> width - 1; i > rx; i--)
-                    tf -> line[ry][i] = tf -> line[ry][i - 1];
-            } else
-                for (i = len[ry]; i > rx; i--)
-                    tf -> line[ry][i] = tf -> line[ry][i - 1];
+                i = tf -> width - 1;
+            } else i = len[ry];
+            for (; i > rx; i--)
+                tf -> line[ry][i] = tf -> line[ry][i - 1];
             /* insert character */
             tf -> line[ry][rx] = k.c;
             len[eocp]++;
