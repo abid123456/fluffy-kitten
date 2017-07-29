@@ -48,8 +48,8 @@ void ftfield(struct tfield *tf)
     short  n;       /* used to determine newline presence       */
     short  maxy;    /* highest used y-coordinate                */
     
-    short *len;     /* lengths of lines                               */
-    char  *changed; /* whether lines has changed and must be rendered */
+    short *len;     /* lengths of lines                                */
+    char  *changed; /* whether lines have changed and must be rendered */
     
     char  *cpybuf;  /* string buffer  */
     char  *pbuf;    /* pointer buffer */
