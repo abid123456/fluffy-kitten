@@ -135,20 +135,20 @@ void ftfield(struct tfield *tf)
             if (ry == maxy) break;
             if (k.spc == SPC_RIGHT) rx = 0;
             if (tf -> line[ry++][n]) eocp++;
-            if (rx > len[ry]) rx = len[ry];
-            goto adjust_rx;
-        case SPC_UP:
-            if (!ry) break;
-            if (rx > len[--ry]) rx = len[ry];
-            goto adjust_rx;
+            goto check_x_coord;
         case SPC_LEFT:
         case SPC_BACK:
             if (rx) {
                 rx--;
                 goto check_key;
             }
+        case SPC_UP:
             if (!ry) break;
-            if (tf -> line[--ry][n]) eocp--;
+            ry--;
+            if (tf -> line[ry][n]) eocp--;
+        check_x_coord:
+            if ((k.spc == SPC_UP || k.spc == DOWN) && rx <= len[ry])
+                goto adjust_rx;
         case SPC_END:
             rx = len[ry];
         adjust_rx:
