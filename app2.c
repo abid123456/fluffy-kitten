@@ -2,17 +2,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define NOTHING_SPECIAL 0
-#define SPC_RIGHT       1
-#define SPC_DOWN        2
-#define SPC_UP          3
-#define SPC_LEFT        4
-#define SPC_BACK        5
-#define SPC_END         6
-#define SPC_DEL         7
-#define SPC_ENTER       8
-#define SPC_HOME        9
-#define SPC_ESC        10
+#define NOTHING_SPECIAL 0x00
+#define SPC_RIGHT       0x01
+#define SPC_DOWN        0x10
+#define SPC_UP          0x11
+#define SPC_LEFT        0x02
+#define SPC_BACK        0x03
+#define SPC_END         0x04
+#define SPC_DEL         0x05
+#define SPC_ENTER       0x06
+#define SPC_HOME        0x07
+#define SPC_ESC         0x08
+#define SPC_VERTICAL    0x10
 
 typedef struct coord {
     short x;
@@ -144,10 +145,9 @@ void ftfield(struct tfield *tf)
             }
         case SPC_UP:
             if (!ry) break;
-            ry--;
-            if (tf -> line[ry][n]) eocp--;
+            if (tf -> line[--ry][n]) eocp--;
         check_x_coord:
-            if ((k.spc == SPC_UP || k.spc == DOWN) && rx <= len[ry])
+            if ((k.spc & SPC_VERTICAL) && rx <= len[ry])
                 goto adjust_rx;
         case SPC_END:
             rx = len[ry];
