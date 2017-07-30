@@ -13,6 +13,7 @@
 #define SPC_ENTER       0x06
 #define SPC_HOME        0x07
 #define SPC_ESC         0x08
+
 #define SPC_VERTICAL    0x10
 
 typedef struct coord {
