@@ -22,7 +22,8 @@ typedef struct coord {
 } coord;
 
 typedef struct key {
-    
+    char spc;
+    char c;
 } key;
 
 struct tfield {
@@ -70,7 +71,7 @@ void ftfield(struct tfield *tf)
     cpybuf  = calloc(tf -> width + 1, sizeof *cpybuf);
     pbuf    = NULL;
     
-    /* init length array */
+    /* init len members and maxy */
     for (i = 0; i < tf -> lc; i++) {
         len[i] = strlen(tf -> line[i]);
         if (!len[i] && !tf -> line[i][n]) {
@@ -85,13 +86,13 @@ void ftfield(struct tfield *tf)
         while (eocp != maxy && !tf -> line[eocp][n]) eocp++;
         
         /* update display */
-        s_mvcur(c(tf -> linepos[ry].x + rx, tf -> linepos[ry].y));
         for (i = 0; i < tf -> lc; i++) {
             if (changed[i]) {
                 dltfield(*tf, i);
                 changed[i] = 0;
             }
         }
+        s_mvcur(c(tf -> linepos[ry].x + rx, tf -> linepos[ry].y));
         
         /* main switch */
         switch ((k = s_read_key()).spc) {
@@ -161,7 +162,7 @@ void ftfield(struct tfield *tf)
             /* if a newline is deleted */
             if (ry == eocp && rx == len[ry]) {
                 tf -> line[ry][n] = 0;
-                while (eocp < maxy && !tf -> line[eocp][n]) eocp++;
+                while (eocp != maxy && !tf -> line[eocp][n]) eocp++;
                 if (rx == tf -> width) {
                     ry++;
                     rx = 0;
@@ -175,58 +176,54 @@ void ftfield(struct tfield *tf)
                     for (i2 = postrx; i2 < len[i]; i2++)
                         tf -> line[i][i2 - postrx] = tf -> line[i][i2];
                 }
-                tf -> line[eocp][len[eocp] - postrx] = '\0';
+                i--;
                 /* in the end */
                 if (len[eocp] > postrx) {
-                    for (i = len[eocp] - postrx + 1;
-                        i < len[eocp]; i++)
-                        tf -> line[eocp][i] = '\0';
+                    for (i2 = rx; i2 < tf -> width; i2++)
+                        tf -> line[i][i2] = tf -> line[eocp][i2 - rx];
+                    for (i2 = postrx; tf -> line[eocp][i2]; i2++)
+                        tf -> line[eocp][i2 - postrx] = tf -> line[eocp][i2];
+                    len[i] = tf -> width;
+                    len[eocp] -= postrx;
+                    tf -> line[eocp][len[eocp]] = '\0';
                 } else {
-                    strcpy(tf -> line[eocp - 1] + rx,
-                            tf -> line[eocp]);
-                    for (i = rx + len[eocp] + 1; i < tf -> width; i++)
-                        tf -> line[eocp - 1][i] = '\0';
-                    memset(tf -> line[eocp], (int) '\0', len[eocp]
-                            * sizeof **tf -> line);
-                }
-                len[ry] = tf -> width;
-                len[eocp] -= postrx;
-                if (len[eocp] < 0) {
-                    len[eocp - 1] += len[eocp];
+                    for (i2 = rx; tf -> line[eocp][i2]; i2++)
+                        tf -> line[i][i2] = tf -> line[eocp][i2 - rx];
+                    len[i] += len[eocp];
                     len[eocp] = 0;
+                    tf -> line[eocp][0] = '\0';
                 }
-                tf -> line[ry][n] = 0;
             } else { /* if a character is deleted */
                 /* shift characters within the current paragraph */
-                strcpy(cpybuf, tf -> line[ry] + rx + 1);
-                strcpy(tf -> line[ry] + rx, cpybuf);
-                for (i = ry + 1; i <= eocp; i++) {
-                    tf -> line[i - 1][tf -> width - 1] = tf -> line[i][0];
-                    strcpy(cpybuf, tf -> line[i] + 1);
-                    strcpy(tf -> line[i], cpybuf);
-                }
-                tf -> line[eocp][--len[eocp]] = '\0';
+                i = ry;
+                if (ry != eocp) {
+                    while (-1) {
+                        for (i2 = rx + 1; i2 < tf -> width; i2++)
+                            tf -> line[i][i2 - 1] = tf -> line[i][i2];
+                        tf -> line[i][tf -> width - 1] = tf -> line[i + 1][0];
+                        if (++i == eocp) break;
+                        for (i2 = 0; i2 < rx; i2++)
+                            tf -> line[i][i2] = tf -> line[i][i2 + 1];
+                    }
+                    i2 = 0;
+                } else i2 = rx;
+                len[eocp]--;
+                for (; i2 < len[eocp]; i2++)
+                    tf -> line[eocp][i2] = tf -> line[eocp][i2 + 1];
+                tf -> line[eocp][len[eocp]] = '\0';
             }
-            /* if the deletion created an empty line */
+            /* if the deletion left an empty line */
             if (!len[eocp] && maxy) {
-                if (eocp)
-                    if (tf -> line[eocp - 1][n]) goto change1; else;
-                else break;
-                pbuf = tf -> line[eocp];
-                *cpybuf = tf -> line[eocp][n];
-                i2 = (int) len[eocp];
-                for (i = eocp--; i < maxy; i++) {
-                    tf -> line[i] = tf -> line[i + 1];
-                    tf -> line[i][n] = tf -> line[i + 1][n];
-                    len[i] = len[i + 1];
-                    changed[i] = 1;
+                if (eocp == maxy) {
+                    changed[eocp] = 1;
+                    tf -> line[eocp][n] = 0;
+                    tf -> line[--eocp][n] = 1;
+                    maxy--;
+                    goto change1;
                 }
-                tf -> line[maxy] = pbuf;
-                tf -> line[maxy][n] = *cpybuf;
-                len[maxy] = (short) i2;
-                changed[maxy--] = 1;
+                for (i = eocp; i < maxy; i++) changed[i] = 1;
+                shift_up(tf, eocp-- + 1, maxy--, len);
             }
-            if (ry > maxy) rx = len[--ry];
         change1:
             for (i = ry; i <= eocp; i++) changed[i] = 1;
             break;
