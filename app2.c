@@ -16,12 +16,12 @@
 
 #define SPC_VERTICAL    0x10
 
-typedef struct coord {
+typedef struct {
     short x;
     short y;
 } coord;
 
-typedef struct key {
+typedef struct {
     char spc;
     char c;
 } key;
