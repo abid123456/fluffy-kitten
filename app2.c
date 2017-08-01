@@ -168,8 +168,8 @@ void ftfield(struct tfield *tf)
                     rx = 0;
                     break;
                 }
-                postrx = tf -> width - rx;
                 /* initial shifting */
+                postrx = tf -> width - rx;
                 for (i = ry + 1; i < eocp; i++) {
                     for (i2 = rx; i2 < tf -> width; i2++)
                         tf -> line[i - 1][i2] = tf -> line[i][i2 - rx];
@@ -261,7 +261,7 @@ void ftfield(struct tfield *tf)
                 goto change2;
             }
             /* 0 or 8 */
-            i = eocp;
+            postrx = tf -> width - rx;
             if (i2) { /* 8 */
                 tf -> line[eocp + 1][n] = 1;
                 if (eocp != ry) tf -> line[eocp][n] = 0;
@@ -269,13 +269,20 @@ void ftfield(struct tfield *tf)
                     tf -> line[eocp + 1][i - rx] = tf -> line[eocp][i];
                     tf -> line[eocp][i] = '\0';
                 }
+                i = eocp;
+            } else { /* 0 */
+                i = eocp - 1;
+                for (i2 = len[eocp] + postrx - 1; i2 >= postrx; i2--)
+                    tf -> line[eocp][i2] = tf - line[eocp][i2 - postrx];
+                for (i2 = rx; i2 < tf -> width; i2++)
+                    tf -> line[eocp][i2 - rx] = tf -> line[i][i2];
             }
-            postrx = tf -> width - rx;
             /* shifting within current paragraph */
             while (i > ry) {
-                strcpy(cpybuf, tf -> line[i]);
-                strcpy(tf -> line[i] + postrx, cpybuf);
-                strncpy(tf -> line[i], tf -> line[i - 1] + rx, postrx);
+                for (i2 = tf -> width - 1; i2 >= postrx; i2--)
+                    tf -> line[i][i2] = tf - line[i][i2 - postrx];
+                for (i2 = rx; i2 < tf -> width; i2++)
+                    tf -> line[i][i2 - rx] = tf -> line[i - 1][i2];
                 tf -> line[--i][rx] = '\0';
             }
             
