@@ -184,14 +184,13 @@ void ftfield(struct tfield *tf)
                     for (i2 = postrx; tf -> line[eocp][i2]; i2++)
                         tf -> line[eocp][i2 - postrx] = tf -> line[eocp][i2];
                     len[i] = tf -> width;
-                    len[eocp] -= postrx;
-                    tf -> line[eocp][len[eocp]] = '\0';
+                    i2 = postrx;
+                    while (i2--) tf -> line[eocp][--len[eocp]] = '\0';
                 } else {
                     for (i2 = rx; tf -> line[eocp][i2]; i2++)
                         tf -> line[i][i2] = tf -> line[eocp][i2 - rx];
                     len[i] += len[eocp];
-                    len[eocp] = 0;
-                    tf -> line[eocp][0] = '\0';
+                    while (len[eocp]) tf -> line[eocp][--len[eocp]] = '\0';
                 }
             } else { /* if a character is deleted */
                 /* shift characters within the current paragraph */
@@ -228,41 +227,48 @@ void ftfield(struct tfield *tf)
             for (i = ry; i <= eocp; i++) changed[i] = 1;
             break;
         case SPC_ENTER:
-            i2 = 0;
             if (!rx) {
-                if (!ry) i2 = 1; /* cursor at (0,0) */
+                if (!ry) i2 = 0x01; /* cursor at (0,0) */
                 else if (tf -> line[ry - 1][n])
-                    i2 = 3; /* immediately after a newline */
+                    i2 = 0x03; /* immediately after a newline */
                 else {
                     tf -> line[ry - 1][n] = 1;
                     break;
                 }
             } else {
                 if (len[eocp] > rx)
-                    i2 = 8; /* too long to fit without a new line */
-                else if (ry == eocp) i2 = (ry == maxy) ? 2 : 4;
+                    i2 = 0x08; /* too long to fit without a new line */
+                else if (ry == eocp) i2 = (ry == maxy) ?
+                0x02: /* cursor at last line */
+                0x06; /* cursor in a line with a newline */
+                else i2 = 0x00;
             }
             if (maxy == tf -> lc - 1) break;
             
-            if (i2 && i2 != 2) { 
-                if (i2 & 0x01) i = ry;
-                else i = eocp + 1;
+            if (i2 && i2 != 0x02) { /* 1, 3, 6, or 8 */
+                if (i2 & 0x01) /* 1 or 3 */
+                    i = ry;
+                else /* 6 or 8 */
+                    i = eocp + 1;
                 shift_down(tf, i, maxy, len);
             }
-            tf -> line[i2 == 4 ? ry + 1 : ry][n] = 1;
-            if (i2) maxy++;
-            for (i = maxy; i >= ry; i--) changed[i] = 1;
-            
-            if (i2 & 0x07) goto end_enter;
-            
+            tf -> line[i2 == 0x04 ? ry + 1 : ry][n] = 1;
+            if (i2 & 0x01) /* 1 or 3 */
+                goto change2;
+            if (i2 & 0x02) { /* 2 or 6 */
+                for (i = rx; i < len[rx]; i++)
+                    tf -> line[ry + 1][i - rx] = tf -> line[ry][i];
+                goto change2;
+            }
+            /* 0 or 8 */
             i = eocp;
-            if (i2) {
-                if (eocp != maxy - 1) {
-                    tf -> line[eocp + 1][n] = 1;
-                    if (eocp != ry) tf -> line[eocp][n] = 0;
+            if (i2) { /* 8 */
+                tf -> line[eocp + 1][n] = 1;
+                if (eocp != ry) tf -> line[eocp][n] = 0;
+                for (i = rx; i < len[eocp]; i++) {
+                    tf -> line[eocp + 1][i - rx] = tf -> line[eocp][i];
+                    tf -> line[eocp][i] = '\0';
                 }
-                strcpy(tf -> line[eocp + 1], tf -> line[eocp] + rx);
-                tf -> line[eocp][rx] = '\0';
             }
             postrx = tf -> width - rx;
             /* shifting within current paragraph */
@@ -281,7 +287,8 @@ void ftfield(struct tfield *tf)
                 len[eocp + 1] = len[eocp] - tf -> width;
                 len[eocp] = tf -> width;
             }
-        end_enter:
+        change2:
+            for (i = maxy; i >= ry; i--) changed[i] = 1;
             eocp = ++ry;
         case SPC_HOME:
             rx = 0;
