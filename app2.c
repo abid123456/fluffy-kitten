@@ -35,8 +35,10 @@ struct tfield {
 };
 
 void  ftfield(struct tfield *tf);
+void  dltfield(struct tfield tf, short y);
+void  shift_down(struct tfield *tf, short top, short bottom, short *len);
+void  shift_up(struct tfield *tf, short top, short bottom, short *len);
 coord c(short x, short y);
-shift_down(struct tfield *tf, short top, short bottom, short *len);
 
 void  s_prepare();
 key   s_read_key();
@@ -308,6 +310,24 @@ void ftfield(struct tfield *tf)
             return;
         }
     }
+    return;
+}
+
+void dltfield(struct tfield tf, short y)
+{
+    
+    return;
+}
+
+void shift_down(struct tfield *tf, short top, short bottom, short *len)
+{
+    
+    return;
+}
+
+void shift_up(struct tfield *tf, short top, short bottom, short *len)
+{
+    
     return;
 }
 
