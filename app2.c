@@ -34,11 +34,15 @@ struct tfield {
     coord *linepos;
 };
 
-void ftfield(struct tfield *tf);
+void  ftfield(struct tfield *tf);
+coord c(short x, short y);
+shift_down(struct tfield *tf, short top, short bottom, short *len);
 
 void  s_prepare();
 key   s_read_key();
-coord c(short x, short y);
+void  s_mvcur(coord c);
+COORD s_c(short x, short y);
+COORD s_cfc(coord c);
 
 HANDLE h_in, h_out;
 
@@ -350,4 +354,30 @@ key s_read_key()
         k.spc = NOTHING_SPECIAL;
         return k;
     }
+}
+
+void s_mvcur(coord c)
+{
+    SetConsoleCursorPosition(h_out, s_cfc(c));
+    return;
+}
+
+COORD s_c(short x, short y)
+{
+    COORD c;
+    
+    c.X = x;
+    c.Y = y;
+    
+    return c;
+}
+
+COORD s_cfc(coord c)
+{
+    COORD sc;
+    
+    sc.X = c.x;
+    sc.Y = c.y;
+    
+    return sc;
 }
