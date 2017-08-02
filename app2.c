@@ -322,7 +322,6 @@ key s_read_key()
         ReadConsoleInput(h_in, &ir, (DWORD) 1, &d);
         if (ir.EventType != KEY_EVENT) continue;
         if (!ir.Event.KeyEvent.bKeyDown) continue;
-        d = (DWORD) ir.Event.KeyEvent.wVirtualKeyCode;
         switch (ir.Event.KeyEvent.wVirtualKeyCode) {
         case VK_SHIFT:
         case VK_LSHIFT:
@@ -330,13 +329,14 @@ key s_read_key()
             continue;
         }
         k.c = ir.Event.KeyEvent.uChar.AsciiChar;
-        k.spc = NOTHING_SPECIAL;
+        d = (DWORD) ir.Event.KeyEvent.wVirtualKeyCode;
         for (i = sizeof corr_arr / sizeof **corr_arr / 2 - 1; i >= 0; i--) {
             if (d == corr_arr[i][0]) {
                 k.spc = corr_arr[i][1];
-                break;
+                return k;
             }
         }
+        k.spc = NOTHING_SPECIAL;
         return k;
     }
 }
