@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <windows.h>
 
 #define NOTHING_SPECIAL 0x00
 #define SPC_RIGHT       0x01
@@ -37,6 +38,8 @@ void ftfield(struct tfield *tf);
 
 void s_prepare();
 key  s_read_key();
+
+HANDLE h_in, h_out;
 
 int main(int argc, char *argv[])
 {
@@ -269,31 +272,27 @@ void ftfield(struct tfield *tf)
                     tf -> line[eocp + 1][i - rx] = tf -> line[eocp][i];
                     tf -> line[eocp][i] = '\0';
                 }
+                len[eocp] += len[eocp - 1] - rx;
                 i = eocp;
+                len[--eocp] = rx;
             } else { /* 0 */
                 i = eocp - 1;
                 for (i2 = len[eocp] + postrx - 1; i2 >= postrx; i2--)
-                    tf -> line[eocp][i2] = tf - line[eocp][i2 - postrx];
+                    tf -> line[eocp][i2] = tf -> line[eocp][i2 - postrx];
                 for (i2 = rx; i2 < tf -> width; i2++)
                     tf -> line[eocp][i2 - rx] = tf -> line[i][i2];
             }
             /* shifting within current paragraph */
             while (i > ry) {
                 for (i2 = tf -> width - 1; i2 >= postrx; i2--)
-                    tf -> line[i][i2] = tf - line[i][i2 - postrx];
+                    tf -> line[i][i2] = tf -> line[i][i2 - postrx];
                 for (i2 = rx; i2 < tf -> width; i2++)
                     tf -> line[i][i2 - rx] = tf -> line[i - 1][i2];
-                tf -> line[--i][rx] = '\0';
+                i--;
             }
-            
-            for (i = rx + 1; i < tf -> width; i++) tf -> line[ry][i] = '\0';
-            if (eocp == ry) eocp++;
-            len[eocp] += len[ry] - rx;
+            for (i = rx; i < tf -> width; i++) tf -> line[ry][i] = '\0';
+            len[eocp] += postrx;
             len[ry] = rx;
-            if (len[eocp] > tf -> width) {
-                len[eocp + 1] = len[eocp] - tf -> width;
-                len[eocp] = tf -> width;
-            }
         change2:
             for (i = maxy; i >= ry; i--) changed[i] = 1;
             eocp = ++ry;
@@ -309,5 +308,35 @@ void ftfield(struct tfield *tf)
 
 key s_read_key()
 {
-    ReadConsoleInput();
+    const short corr_arr[][2] = {
+        {VK_RIGHT, SPC_RIGHT},
+        {VK_DOWN , SPC_DOWN},
+        {VK_UP   , SPC_UP},
+    };
+    INPUT_RECORD ir;
+    DWORD d;
+    key   k;
+    int   i;
+    
+    while (-1) {
+        ReadConsoleInput(h_in, &ir, (DWORD) 1, &d);
+        if (ir.EventType != KEY_EVENT) continue;
+        if (!ir.Event.KeyEvent.bKeyDown) continue;
+        d = (DWORD) ir.Event.KeyEvent.wVirtualKeyCode;
+        switch (ir.Event.KeyEvent.wVirtualKeyCode) {
+        case VK_SHIFT:
+        case VK_LSHIFT:
+        case VK_RSHIFT:
+            continue;
+        }
+        k.c = ir.Event.KeyEvent.uChar.AsciiChar;
+        k.spc = NOTHING_SPECIAL;
+        for (i = sizeof corr_arr / sizeof **corr_arr / 2 - 1; i >= 0; i--) {
+            if (d == corr_arr[i][0]) {
+                k.spc = corr_arr[i][1];
+                break;
+            }
+        }
+        return k;
+    }
 }
