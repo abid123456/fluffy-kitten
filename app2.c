@@ -36,8 +36,9 @@ struct tfield {
 
 void ftfield(struct tfield *tf);
 
-void s_prepare();
-key  s_read_key();
+void  s_prepare();
+key   s_read_key();
+coord c(short x, short y);
 
 HANDLE h_in, h_out;
 
@@ -304,6 +305,16 @@ void ftfield(struct tfield *tf)
         }
     }
     return;
+}
+
+coord c(short x, short y)
+{
+    coord c;
+    
+    c.x = x;
+    c.y = y;
+    
+    return c;
 }
 
 key s_read_key()
