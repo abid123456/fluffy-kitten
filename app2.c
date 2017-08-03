@@ -24,6 +24,7 @@
 #define F_GREEN         FOREGROUND_GREEN
 #define F_RED           FOREGROUND_RED
 #define F_INTENSITY     FOREGROUND_INTENSITY
+#define F_BLACK         0
 #define B_BLUE          BACKGROUND_BLUE
 #define B_GREEN         BACKGROUND_GREEN
 #define B_RED           BACKGROUND_RED
@@ -41,7 +42,7 @@ typedef struct {
 
 typedef struct {
     char  c;
-    short attributes;
+    short a;
 } char_info;
 
 struct tfield {
@@ -55,6 +56,7 @@ void  ftfield(struct tfield *tf);
 void  dltfield(struct tfield tf, short y);
 void  shift_down(struct tfield *tf, short top, short bottom, short *len);
 void  shift_up(struct tfield *tf, short top, short bottom, short *len);
+void  printcis(char_info *arr, coord c);
 coord c(short x, short y);
 
 void  s_prepare();
@@ -336,6 +338,20 @@ void dltfield(struct tfield tf, short y)
         '_',
         F_GREY & B_WHITE
     };
+    
+    char_info *cia;
+    int        x;
+    char       c;
+    
+    cia = malloc(tf.width * sizeof *cia);
+    
+    for (x = 0; x < tf.width; x++) {
+        cia[x].c = tf.line[y][x];
+        cia[x].a = B_WHITE & (cia[x].c == ' ' || !cia[x].c) ?
+                   F_GREY : F_BLACK;
+    }
+    printcis(cia, tf.linepos[y]);
+    
     return;
 }
 
@@ -370,6 +386,12 @@ void shift_up(struct tfield *tf, short top, short bottom, short *len)
     }
     tf -> line[bottom] = linebuf;
     len[bottom] = lenbuf;
+    return;
+}
+
+void printcis(char_info *arr, coord c)
+{
+    
     return;
 }
 
