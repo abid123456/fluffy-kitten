@@ -17,6 +17,18 @@
 
 #define SPC_VERTICAL    0x10
 
+#define F_GREY          F_BLUE & F_GREEN & F_RED
+#define B_WHITE         B_BLUE & B_GREEN & B_RED & B_INTENSITY
+
+#define F_BLUE          FOREGROUND_BLUE
+#define F_GREEN         FOREGROUND_GREEN
+#define F_RED           FOREGROUND_RED
+#define F_INTENSITY     FOREGROUND_INTENSITY
+#define B_BLUE          BACKGROUND_BLUE
+#define B_GREEN         BACKGROUND_GREEN
+#define B_RED           BACKGROUND_RED
+#define B_INTENSITY     BACKGROUND_INTENSITY
+
 typedef struct {
     short x;
     short y;
@@ -26,6 +38,11 @@ typedef struct {
     char spc;
     char c;
 } key;
+
+typedef struct {
+    char  c;
+    short attributes;
+} char_info;
 
 struct tfield {
     short width;
@@ -315,19 +332,44 @@ void ftfield(struct tfield *tf)
 
 void dltfield(struct tfield tf, short y)
 {
-    
+    const CHAR_INFO ci = {
+        (CHAR) '_',
+        F_GREY & B_WHITE
+    };
     return;
 }
 
 void shift_down(struct tfield *tf, short top, short bottom, short *len)
 {
+    char *linebuf;
+    short lenbuf;
+    int   i;
     
+    linebuf = tf -> line[++bottom];
+    lenbuf  = len[bottom];
+    for (i = bottom; i > top; i++) {
+        tf -> line[i] = tf -> line[i - 1];
+        len[i] = len[i - 1];
+    }
+    tf -> line[top] = linebuf;
+    len[top] = lenbuf;
     return;
 }
 
 void shift_up(struct tfield *tf, short top, short bottom, short *len)
 {
+    char *linebuf;
+    short lenbuf;
+    int   i;
     
+    linebuf = tf -> line[--top];
+    lenbuf  = len[top];
+    for (i = top; i < bottom; i++) {
+        tf -> line[i] = tf -> line[i + 1];
+        len[i] = len[i + 1];
+    }
+    tf -> line[bottom] = linebuf;
+    len[bottom] = lenbuf;
     return;
 }
 
