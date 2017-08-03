@@ -332,8 +332,8 @@ void ftfield(struct tfield *tf)
 
 void dltfield(struct tfield tf, short y)
 {
-    const CHAR_INFO ci = {
-        (CHAR) '_',
+    const char_info ci = {
+        '_',
         F_GREY & B_WHITE
     };
     return;
