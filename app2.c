@@ -56,11 +56,11 @@ void  ftfield(struct tfield *tf);
 void  dltfield(struct tfield tf, short y);
 void  shift_down(struct tfield *tf, short top, short bottom, short *len);
 void  shift_up(struct tfield *tf, short top, short bottom, short *len);
-void  printcis(char_info *arr, coord c);
 coord c(short x, short y);
 
 void  s_prepare();
 key   s_read_key();
+void  s_printcis(char_info *arr, coord c);
 void  s_mvcur(coord c);
 COORD s_c(short x, short y);
 COORD s_cfc(coord c);
@@ -389,12 +389,6 @@ void shift_up(struct tfield *tf, short top, short bottom, short *len)
     return;
 }
 
-void printcis(char_info *arr, coord c)
-{
-    
-    return;
-}
-
 coord c(short x, short y)
 {
     coord c;
@@ -438,6 +432,12 @@ key s_read_key()
         k.spc = NOTHING_SPECIAL;
         return k;
     }
+}
+
+void s_printcis(char_info *arr, coord c)
+{
+    
+    return;
 }
 
 void s_mvcur(coord c)
