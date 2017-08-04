@@ -71,9 +71,24 @@ HANDLE h_in, h_out;
 
 int main(int argc, char *argv[])
 {
+    struct tfield *tf;
+    int i;
+    
+    printf("1");
+    tf = calloc(1, sizeof *tf);
+    printf("2");
+    tf -> width = 10;
+    tf -> lc    = 10;
+    tf -> linepos = malloc(tf -> lc * sizeof *tf -> linepos);
+    for (i = 0; i < 10; i++)
+        tf -> linepos[i] = c(3, i + 3);
+    printf("3");
+    ftfield(tf);
     
     return 0;
 }
+
+void 
 
 void ftfield(struct tfield *tf)
 {
@@ -99,18 +114,18 @@ void ftfield(struct tfield *tf)
     len     = calloc(tf -> lc, sizeof *len);
     changed = calloc(tf -> lc, sizeof *changed);
     
-    cpybuf  = calloc(tf -> width + 1, sizeof *cpybuf);
-    pbuf    = NULL;
-    
+    printf("4");
     /* init len members and maxy */
     for (i = 0; i < tf -> lc; i++) {
+        printf("5");
         len[i] = strlen(tf -> line[i]);
         if (!len[i] && !tf -> line[i][n]) {
             maxy = i ? i - 1 : 0;
             break;
         }
+        printf("6");
     }
-    
+    printf("7");
     /* main loop */
     while (-1) {
         /* adjust eocp */
@@ -447,7 +462,7 @@ void s_printcis(char_info *arr, int len, coord c)
     for (i = 0; i < len; i++) {
         sci = s_ci(arr[i]);
         sc  = s_cfc(c);
-        ssr = s_sr(c.x + 1, c.y, c.x + 1, c.y);
+        ssr = s_sr(c.x + i, c.y, c.x + i, c.y);
         WriteConsoleOutput(h_out, &sci, s_c(1, 1), s_c(1, 1), &ssr);
     }
     return;
