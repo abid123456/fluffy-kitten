@@ -42,7 +42,7 @@ typedef struct {
 
 typedef struct {
     char  c;
-    short a;
+    short attributes;
 } char_info;
 
 struct tfield {
@@ -58,12 +58,14 @@ void  shift_down(struct tfield *tf, short top, short bottom, short *len);
 void  shift_up(struct tfield *tf, short top, short bottom, short *len);
 coord c(short x, short y);
 
-void  s_prepare();
-key   s_read_key();
-void  s_printcis(char_info *arr, coord c);
-void  s_mvcur(coord c);
-COORD s_c(short x, short y);
-COORD s_cfc(coord c);
+void       s_prepare();
+key        s_read_key();
+void       s_printcis(char_info *arr, int len, coord c);
+void       s_mvcur(coord c);
+CHAR_INFO  s_ci(char_info ci);
+SMALL_RECT s_sr(short left, short top, short right, short bottom);
+COORD      s_c(short x, short y);
+COORD      s_cfc(coord c);
 
 HANDLE h_in, h_out;
 
@@ -346,11 +348,11 @@ void dltfield(struct tfield tf, short y)
     cia = malloc(tf.width * sizeof *cia);
     
     for (x = 0; x < tf.width; x++) {
-        cia[x].c = tf.line[y][x];
-        cia[x].a = B_WHITE & (cia[x].c == ' ' || !cia[x].c) ?
-                   F_GREY : F_BLACK;
+        cia[x].c          = tf.line[y][x];
+        cia[x].attributes = B_WHITE & (cia[x].c == ' ' || !cia[x].c) ?
+                            F_GREY : F_BLACK;
     }
-    printcis(cia, tf.linepos[y]);
+    s_printcis(cia, tf.width, tf.linepos[y]);
     
     return;
 }
@@ -434,9 +436,20 @@ key s_read_key()
     }
 }
 
-void s_printcis(char_info *arr, coord c)
+void s_printcis(char_info *arr, int len, coord c)
 {
+    SMALL_RECT ssr;
+    CHAR_INFO  sci;
+    COORD sc;
+    DWORD d;
+    int   i;
     
+    for (i = 0; i < len; i++) {
+        sci = s_ci(arr[i]);
+        sc  = s_cfc(c);
+        ssr = s_sr(c.x + 1, c.y, c.x + 1, c.y);
+        WriteConsoleOutput(h_out, &sci, s_c(1, 1), s_c(1, 1), &ssr);
+    }
     return;
 }
 
@@ -444,6 +457,28 @@ void s_mvcur(coord c)
 {
     SetConsoleCursorPosition(h_out, s_cfc(c));
     return;
+}
+
+CHAR_INFO s_ci(char_info ci)
+{
+    CHAR_INFO sci;
+    
+    sci.Char.AsciiChar = ci.c;
+    sci.Attributes = ci.attributes;
+    
+    return sci;
+}
+
+SMALL_RECT s_sr(short left, short top, short right, short bottom)
+{
+    SMALL_RECT sr;
+    
+    sr.Left   = left;
+    sr.Top    = top;
+    sr.Right  = right;
+    sr.Bottom = bottom;
+    
+    return sr;
 }
 
 COORD s_c(short x, short y)
