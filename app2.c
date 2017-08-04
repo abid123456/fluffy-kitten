@@ -146,6 +146,8 @@ void ftfield(struct tfield *tf)
     printf("7");
     /* main loop */
     while (-1) {
+        s_mvcur(c(0, 0));
+        printf("%02x", k.spc);
         /* adjust eocp */
         while (eocp != maxy && !tf -> line[eocp][n]) eocp++;
         
@@ -445,9 +447,16 @@ void s_prepare()
 key s_read_key()
 {
     const short corr_arr[][2] = {
-        {VK_RIGHT, SPC_RIGHT},
-        {VK_DOWN , SPC_DOWN},
-        {VK_UP   , SPC_UP},
+        {VK_RIGHT  , SPC_RIGHT},
+        {VK_DOWN   , SPC_DOWN},
+        {VK_UP     , SPC_UP},
+        {VK_LEFT   , SPC_LEFT},
+        {VK_BACK   , SPC_BACK},
+        {VK_END    , SPC_END},
+        {VK_DELETE , SPC_DEL},
+        {VK_RETURN , SPC_ENTER},
+        {VK_HOME   , SPC_HOME},
+        {VK_ESCAPE , SPC_ESC},
     };
     INPUT_RECORD ir;
     DWORD d;
@@ -480,15 +489,15 @@ key s_read_key()
 void s_printcis(char_info *arr, int len, coord c)
 {
     SMALL_RECT ssr;
-    CHAR_INFO  sci;
+    CHAR_INFO *sci;
     COORD sc;
     DWORD d;
     int   i;
     
+    sc  = s_cfc(c);
+        ssr = s_sr(c.x + i, c.y, c.x + i, c.y);
     for (i = 0; i < len; i++) {
         sci = s_ci(arr[i]);
-        sc  = s_cfc(c);
-        ssr = s_sr(c.x + i, c.y, c.x + i, c.y);
         WriteConsoleOutput(s_h_out, &sci, s_c(1, 1), s_c(1, 1), &ssr);
     }
     return;
