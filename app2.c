@@ -42,7 +42,7 @@ typedef struct {
 
 typedef struct {
     char  c;
-    short attributes;
+    short a;
 } char_info;
 
 struct tfield {
@@ -52,11 +52,12 @@ struct tfield {
     coord *linepos;
 };
 
-void  ftfield(struct tfield *tf);
-void  dltfield(struct tfield tf, short y);
-void  shift_down(struct tfield *tf, short top, short bottom, short *len);
-void  shift_up(struct tfield *tf, short top, short bottom, short *len);
-coord c(short x, short y);
+void           ftfield(struct tfield *tf);
+struct tfield *tfield(short width, short lc, coord *linepos);
+void           dltfield(struct tfield tf, short y);
+void           shift_down(struct tfield *tf, short top, short bottom, short *len);
+void           shift_up(struct tfield *tf, short top, short bottom, short *len);
+coord          c(short x, short y);
 
 void       s_prepare();
 key        s_read_key();
@@ -67,7 +68,7 @@ SMALL_RECT s_sr(short left, short top, short right, short bottom);
 COORD      s_c(short x, short y);
 COORD      s_cfc(coord c);
 
-HANDLE h_in, h_out;
+HANDLE s_h_in, s_h_out;
 
 int main(int argc, char *argv[])
 {
@@ -75,20 +76,37 @@ int main(int argc, char *argv[])
     int i;
     
     printf("1");
-    tf = calloc(1, sizeof *tf);
+    s_prepare();
+    tf = tfield(10, 10, NULL);
     printf("2");
-    tf -> width = 10;
-    tf -> lc    = 10;
-    tf -> linepos = malloc(tf -> lc * sizeof *tf -> linepos);
-    for (i = 0; i < 10; i++)
-        tf -> linepos[i] = c(3, i + 3);
+    for (i = 0; i < tf -> lc; i++)
+        tf -> linepos[i] = c(10, i + 10);
     printf("3");
     ftfield(tf);
     
     return 0;
 }
 
-void 
+struct tfield *tfield(short width, short lc, coord *linepos)
+{
+    struct tfield *tf;
+    int i, i2;
+    
+    tf = malloc(sizeof *tf);
+    tf -> width   = width;
+    tf -> lc      = lc;
+    tf -> linepos = malloc(lc * sizeof *tf -> linepos);
+    tf -> line    = malloc(lc * sizeof *tf -> line);
+    
+    for (i = 0; i < lc; i++) {
+        tf -> line[i] = malloc(width * sizeof **tf -> line);
+        for (i2 = 0; i2 < width; i2++) tf -> line[i][i2] = '\0';
+    }
+    if (linepos != NULL)
+        for (i = 0; i < lc; i++) tf -> linepos[i] = linepos[i];
+    
+    return tf;
+}
 
 void ftfield(struct tfield *tf)
 {
@@ -363,9 +381,9 @@ void dltfield(struct tfield tf, short y)
     cia = malloc(tf.width * sizeof *cia);
     
     for (x = 0; x < tf.width; x++) {
-        cia[x].c          = tf.line[y][x];
-        cia[x].attributes = B_WHITE & (cia[x].c == ' ' || !cia[x].c) ?
-                            F_GREY : F_BLACK;
+        cia[x].c = tf.line[y][x];
+        cia[x].a = B_WHITE & (cia[x].c == ' ' || !cia[x].c) ?
+                   F_GREY : F_BLACK;
     }
     s_printcis(cia, tf.width, tf.linepos[y]);
     
@@ -416,6 +434,14 @@ coord c(short x, short y)
     return c;
 }
 
+void s_prepare()
+{
+    s_h_in  = GetStdHandle(STD_INPUT_HANDLE);
+    s_h_out = GetStdHandle(STD_OUTPUT_HANDLE);
+    
+    return;
+}
+
 key s_read_key()
 {
     const short corr_arr[][2] = {
@@ -427,9 +453,9 @@ key s_read_key()
     DWORD d;
     key   k;
     int   i;
-    
+     
     while (-1) {
-        ReadConsoleInput(h_in, &ir, (DWORD) 1, &d);
+        ReadConsoleInput(s_h_in, &ir, (DWORD) 1, &d);
         if (ir.EventType != KEY_EVENT) continue;
         if (!ir.Event.KeyEvent.bKeyDown) continue;
         switch (ir.Event.KeyEvent.wVirtualKeyCode) {
@@ -463,14 +489,14 @@ void s_printcis(char_info *arr, int len, coord c)
         sci = s_ci(arr[i]);
         sc  = s_cfc(c);
         ssr = s_sr(c.x + i, c.y, c.x + i, c.y);
-        WriteConsoleOutput(h_out, &sci, s_c(1, 1), s_c(1, 1), &ssr);
+        WriteConsoleOutput(s_h_out, &sci, s_c(1, 1), s_c(1, 1), &ssr);
     }
     return;
 }
 
 void s_mvcur(coord c)
 {
-    SetConsoleCursorPosition(h_out, s_cfc(c));
+    SetConsoleCursorPosition(s_h_out, s_cfc(c));
     return;
 }
 
@@ -479,7 +505,7 @@ CHAR_INFO s_ci(char_info ci)
     CHAR_INFO sci;
     
     sci.Char.AsciiChar = ci.c;
-    sci.Attributes = ci.attributes;
+    sci.Attributes = ci.a;
     
     return sci;
 }
