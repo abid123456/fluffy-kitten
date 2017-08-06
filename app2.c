@@ -17,8 +17,8 @@
 
 #define SPC_VERTICAL    0x10
 
-#define F_GREY          F_BLUE & F_GREEN & F_RED
-#define B_WHITE         B_BLUE & B_GREEN & B_RED & B_INTENSITY
+#define F_GREY          F_BLUE | F_GREEN | F_RED
+#define B_WHITE         B_BLUE | B_GREEN | B_RED | B_INTENSITY
 
 #define F_BLUE          FOREGROUND_BLUE
 #define F_GREEN         FOREGROUND_GREEN
@@ -52,12 +52,13 @@ struct tfield {
     coord *linepos;
 };
 
-void           ftfield(struct tfield *tf);
 struct tfield *tfield(short width, short lc, coord *linepos);
-void           dltfield(struct tfield tf, short y);
-void           shift_down(struct tfield *tf, short top, short bottom, short *len);
-void           shift_up(struct tfield *tf, short top, short bottom, short *len);
-coord          c(short x, short y);
+void  ftfield(struct tfield *tf);
+void  dltfield(struct tfield tf, short y);
+void  dtfield(struct tfield tf);
+void  shift_down(struct tfield *tf, short top, short bottom, short *len);
+void  shift_up(struct tfield *tf, short top, short bottom, short *len);
+coord c(short x, short y);
 
 void       s_prepare();
 key        s_read_key();
@@ -75,12 +76,14 @@ int main(int argc, char *argv[])
     struct tfield *tf;
     int i;
     
-    printf("1");
     s_prepare();
+    s_mvcur(c(0, 4));
+    printf("1");
     tf = tfield(10, 10, NULL);
     printf("2");
     for (i = 0; i < tf -> lc; i++)
         tf -> linepos[i] = c(10, i + 10);
+    dtfield(*tf);
     printf("3");
     ftfield(tf);
     
@@ -99,8 +102,8 @@ struct tfield *tfield(short width, short lc, coord *linepos)
     tf -> line    = malloc(lc * sizeof *tf -> line);
     
     for (i = 0; i < lc; i++) {
-        tf -> line[i] = malloc(width * sizeof **tf -> line);
-        for (i2 = 0; i2 < width; i2++) tf -> line[i][i2] = '\0';
+        tf -> line[i] = malloc((width + 1) * sizeof **tf -> line);
+        for (i2 = 0; i2 <= width; i2++) tf -> line[i][i2] = '\0';
     }
     if (linepos != NULL)
         for (i = 0; i < lc; i++) tf -> linepos[i] = linepos[i];
@@ -127,7 +130,7 @@ void ftfield(struct tfield *tf)
     /* init some variables */
     rx = ry = 0;
     eocp    = 0;
-    n       = tf -> width + 1;
+    n       = tf -> width;
     
     len     = calloc(tf -> lc, sizeof *len);
     changed = calloc(tf -> lc, sizeof *changed);
@@ -146,17 +149,27 @@ void ftfield(struct tfield *tf)
     printf("7");
     /* main loop */
     while (-1) {
-        s_mvcur(c(0, 0));
-        printf("%02x", k.spc);
+        /*printf("%02x", k.spc);
         /* adjust eocp */
-        while (eocp != maxy && !tf -> line[eocp][n]) eocp++;
+        s_mvcur(c(0, 4));
+        printf("1, eocp == %d, maxy == %d, ", eocp, maxy);
+        while (eocp != maxy && !tf -> line[eocp][n]) {
+            printf("w");
+            eocp++;
+        }
+        printf("2");
         
         /* update display */
+        printf("3");
         for (i = 0; i < tf -> lc; i++) {
             if (changed[i]) {
                 dltfield(*tf, i);
                 changed[i] = 0;
             }
+            s_mvcur(c(0, 3));
+            printf("f%d", i);
+            s_mvcur(c(tf -> linepos[i].x + tf -> width, tf -> linepos[i].y));
+            printf("%c", tf -> line[i][n] ? 'n' : '_');
         }
         s_mvcur(c(tf -> linepos[ry].x + rx, tf -> linepos[ry].y));
         
@@ -293,6 +306,7 @@ void ftfield(struct tfield *tf)
             for (i = ry; i <= eocp; i++) changed[i] = 1;
             break;
         case SPC_ENTER:
+            s_mvcur(c(0, 3));
             if (!rx) {
                 if (!ry) i2 = 0x01; /* cursor at (0,0) */
                 else if (tf -> line[ry - 1][n])
@@ -318,14 +332,18 @@ void ftfield(struct tfield *tf)
                     i = eocp + 1;
                 shift_down(tf, i, maxy, len);
             }
+            
             tf -> line[i2 == 0x04 ? ry + 1 : ry][n] = 1;
+            
             if (i2 & 0x01) /* 1 or 3 */
                 goto change2;
+            
             if (i2 & 0x02) { /* 2 or 6 */
                 for (i = rx; i < len[rx]; i++)
                     tf -> line[ry + 1][i - rx] = tf -> line[ry][i];
                 goto change2;
             }
+            
             /* 0 or 8 */
             postrx = tf -> width - rx;
             if (i2) { /* 8 */
@@ -357,7 +375,7 @@ void ftfield(struct tfield *tf)
             len[eocp] += postrx;
             len[ry] = rx;
         change2:
-            for (i = maxy; i >= ry; i--) changed[i] = 1;
+            for (i = maxy++; i >= ry; i--) changed[i] = 1;
             eocp = ++ry;
         case SPC_HOME:
             rx = 0;
@@ -373,21 +391,32 @@ void dltfield(struct tfield tf, short y)
 {
     const char_info ci = {
         '_',
-        F_GREY & B_WHITE
+        F_GREY | B_WHITE
     };
     
     char_info *cia;
-    int        x;
-    char       c;
+    int x;
     
     cia = malloc(tf.width * sizeof *cia);
     
     for (x = 0; x < tf.width; x++) {
         cia[x].c = tf.line[y][x];
-        cia[x].a = B_WHITE & (cia[x].c == ' ' || !cia[x].c) ?
-                   F_GREY : F_BLACK;
+        if (cia[x].c == ' ' || cia[x].c == '\0') {
+            cia[x] = ci;
+            continue;
+        }
+        cia[x].a = B_WHITE | F_BLACK;
     }
     s_printcis(cia, tf.width, tf.linepos[y]);
+    
+    return;
+}
+
+void dtfield(struct tfield tf)
+{
+    int i;
+    
+    for (i = 0; i < tf.lc; i++) dltfield(tf, i);
     
     return;
 }
@@ -490,16 +519,14 @@ void s_printcis(char_info *arr, int len, coord c)
 {
     SMALL_RECT ssr;
     CHAR_INFO *sci;
-    COORD sc;
     DWORD d;
     int   i;
     
-    sc  = s_cfc(c);
-        ssr = s_sr(c.x + i, c.y, c.x + i, c.y);
-    for (i = 0; i < len; i++) {
-        sci = s_ci(arr[i]);
-        WriteConsoleOutput(s_h_out, &sci, s_c(1, 1), s_c(1, 1), &ssr);
-    }
+    sci = malloc(len * sizeof *sci);
+    ssr = s_sr(c.x, c.y, c.x + i - 1, c.y);
+    for (i = 0; i < len; i++) sci[i] = s_ci(arr[i]);
+    WriteConsoleOutput(s_h_out, sci, s_c(len, 1), s_c(0, 0), &ssr);
+    
     return;
 }
 
