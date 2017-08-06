@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
     int i;
     
     s_prepare();
-    s_mvcur(c(0, 4));
+    s_mvcur(c(0, 2));
     printf("1");
     tf = tfield(10, 10, NULL);
     printf("2");
@@ -293,6 +293,7 @@ void ftfield(struct tfield *tf)
             /* if the deletion left an empty line */
             if (!len[eocp] && maxy) {
                 if (eocp == maxy) {
+                    if (tf -> line[eocp - 1][n]) goto change1;
                     changed[eocp] = 1;
                     tf -> line[eocp][n] = 0;
                     tf -> line[--eocp][n] = 1;
