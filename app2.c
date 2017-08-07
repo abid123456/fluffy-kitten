@@ -60,14 +60,16 @@ void  shift_down(struct tfield *tf, short top, short bottom, short *len);
 void  shift_up(struct tfield *tf, short top, short bottom, short *len);
 coord c(short x, short y);
 
-void       s_prepare();
-key        s_read_key();
-void       s_printcis(char_info *arr, int len, coord c);
-void       s_mvcur(coord c);
+void s_prepare();
+key  s_read_key();
+void s_pstrat(const char *str, coord c);
+void s_printcis(char_info *arr, int len, coord c);
+void s_mvcur(coord c);
+
 CHAR_INFO  s_ci(char_info ci);
 SMALL_RECT s_sr(short left, short top, short right, short bottom);
-COORD      s_c(short x, short y);
-COORD      s_cfc(coord c);
+COORD s_c(short x, short y);
+COORD s_cfc(coord c);
 
 HANDLE s_h_in, s_h_out;
 
@@ -514,6 +516,18 @@ key s_read_key()
         k.spc = NOTHING_SPECIAL;
         return k;
     }
+}
+
+void s_pstrat(const char *str, coord c)
+{
+    LPCTSTR sstr;
+    DWORD d;
+    
+    i2 = strlen(str);
+    for (i = 0; i < i2; i++) sstr[i] = (*LPCTSTR) str[i];
+    WriteConsoleOutputCharacter(s_h_out, sstr, i2, s_cfc(c), &d);
+    
+    return;
 }
 
 void s_printcis(char_info *arr, int len, coord c)
