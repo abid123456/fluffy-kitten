@@ -79,14 +79,10 @@ int main(int argc, char *argv[])
     int i;
     
     s_prepare();
-    s_mvcur(c(0, 2));
-    printf("1");
     tf = tfield(10, 10, NULL);
-    printf("2");
     for (i = 0; i < tf -> lc; i++)
         tf -> linepos[i] = c(10, i + 10);
     dtfield(*tf);
-    printf("3");
     ftfield(tf);
     
     return 0;
@@ -137,47 +133,50 @@ void ftfield(struct tfield *tf)
     len     = calloc(tf -> lc, sizeof *len);
     changed = calloc(tf -> lc, sizeof *changed);
     
-    printf("4");
     /* init len members and maxy */
     for (i = 0; i < tf -> lc; i++) {
-        printf("5");
         len[i] = strlen(tf -> line[i]);
         if (!len[i] && !tf -> line[i][n]) {
             maxy = i ? i - 1 : 0;
             break;
         }
-        printf("6");
     }
-    printf("7");
+    
     /* main loop */
     while (-1) {
         /*printf("%02x", k.spc);
         /* adjust eocp */
-        s_mvcur(c(0, 4));
-        printf("1, eocp == %d, maxy == %d, ", eocp, maxy);
-        while (eocp != maxy && !tf -> line[eocp][n]) {
-            printf("w");
-            eocp++;
-        }
-        printf("2");
         
+        s_mvcur(c(0, 4));
+        printf("1, eocp == %d, maxy == %d, (%d, %d)",
+                    eocp, maxy, rx, ry);
+        while (eocp != maxy && !tf -> line[eocp][n]) eocp++;
+        s_mvcur(c(0, 5));
+        printf("1, eocp == %d, maxy == %d, (%d, %d)",
+                    eocp, maxy, rx, ry);
+        s_pstrat("8", c(0, 0));
         /* update display */
-        printf("3");
         for (i = 0; i < tf -> lc; i++) {
-            if (changed[i]) {
+            /*if (changed[i]) {
                 dltfield(*tf, i);
                 changed[i] = 0;
-            }
+            }*/
+            dtfield(*tf);
             s_mvcur(c(0, 3));
             printf("f%d", i);
             s_mvcur(c(tf -> linepos[i].x + tf -> width, tf -> linepos[i].y));
-            printf("%c", tf -> line[i][n] ? 'n' : '_');
+            printf("%c%c%c%x",
+                    tf -> line[i][n] ? 'n' : '_',
+                    i == eocp ? 'e' : '_',
+                    i == maxy ? 'm' : '_',
+                    len[i]);
         }
         s_mvcur(c(tf -> linepos[ry].x + rx, tf -> linepos[ry].y));
-        
+        s_pstrat("9", c(0, 0));
         /* main switch */
         switch ((k = s_read_key()).spc) {
         case NOTHING_SPECIAL:
+        s_pstrat("1", c(1, 0));
             /* insert line if needed */
             if (len[eocp] == tf -> width) {
                 if (maxy == tf -> lc - 1) break;
@@ -211,37 +210,45 @@ void ftfield(struct tfield *tf)
             len[eocp]++;
             for (i = ry; i <= eocp; i++) changed[i] = 1;
         case SPC_RIGHT:
+        s_pstrat("2", c(1, 0));
             if (rx < len[ry] && (ry == eocp || rx < tf -> width - 1)) {
                 rx++;
                 break;
             }
         case SPC_DOWN:
+        s_pstrat("3", c(1, 0));
             if (ry == maxy) break;
             if (k.spc == SPC_RIGHT) rx = 0;
             if (tf -> line[ry++][n]) eocp++;
             goto check_x_coord;
         case SPC_LEFT:
         case SPC_BACK:
+        s_pstrat("5", c(1, 0));
             if (rx) {
                 rx--;
                 goto check_key;
             }
         case SPC_UP:
+        s_pstrat("5", c(1, 0));
             if (!ry) break;
             if (tf -> line[--ry][n]) eocp--;
         check_x_coord:
             if ((k.spc & SPC_VERTICAL) && rx <= len[ry])
                 goto adjust_rx;
         case SPC_END:
+        s_pstrat("6", c(1, 0));
             rx = len[ry];
         adjust_rx:
             if (rx == tf -> width && !tf -> line[ry][n] && ry != maxy) rx--;
         check_key:
             if (k.spc != SPC_BACK) break;
         case SPC_DEL:
+        s_pstrat("7", c(1, 0));
             if (rx == len[ry] && ry == maxy) break;
             /* if a newline is deleted */
             if (ry == eocp && rx == len[ry]) {
+                s_pstrat("1", c(0, 0));
+                s_pstrat("1", c(1, 0));
                 tf -> line[ry][n] = 0;
                 while (eocp != maxy && !tf -> line[eocp][n]) eocp++;
                 if (rx == tf -> width) {
@@ -249,6 +256,7 @@ void ftfield(struct tfield *tf)
                     rx = 0;
                     break;
                 }
+                s_pstrat("2", c(1, 0));
                 /* initial shifting */
                 postrx = tf -> width - rx;
                 for (i = ry + 1; i < eocp; i++) {
@@ -258,6 +266,7 @@ void ftfield(struct tfield *tf)
                         tf -> line[i][i2 - postrx] = tf -> line[i][i2];
                 }
                 i--;
+                s_pstrat("3", c(1, 0));
                 /* in the end */
                 if (len[eocp] > postrx) {
                     for (i2 = rx; i2 < tf -> width; i2++)
@@ -273,8 +282,11 @@ void ftfield(struct tfield *tf)
                     len[i] += len[eocp];
                     while (len[eocp]) tf -> line[eocp][--len[eocp]] = '\0';
                 }
+                s_pstrat("4", c(1, 0));
             } else { /* if a character is deleted */
                 /* shift characters within the current paragraph */
+                s_pstrat("2", c(0, 0));
+                s_pstrat("1", c(1, 0));
                 i = ry;
                 if (ry != eocp) {
                     while (-1) {
@@ -287,29 +299,41 @@ void ftfield(struct tfield *tf)
                     }
                     i2 = 0;
                 } else i2 = rx;
+                s_pstrat("2", c(1, 0));
                 len[eocp]--;
                 for (; i2 < len[eocp]; i2++)
                     tf -> line[eocp][i2] = tf -> line[eocp][i2 + 1];
                 tf -> line[eocp][len[eocp]] = '\0';
+                s_pstrat("3", c(1, 0));
             }
             /* if the deletion left an empty line */
+            s_pstrat("3", c(0, 0));
             if (!len[eocp] && maxy) {
+                s_pstrat("4", c(0, 0));
+                if (tf -> line[eocp - 1][n]) goto change1;
+                if (eocp == ry) rx = len[--ry];
                 if (eocp == maxy) {
-                    if (tf -> line[eocp - 1][n]) goto change1;
-                    changed[eocp] = 1;
-                    tf -> line[eocp][n] = 0;
-                    tf -> line[--eocp][n] = 1;
+                    changed[eocp--] = 1;
                     maxy--;
                     goto change1;
                 }
+                s_pstrat("5", c(0, 0));
                 for (i = eocp; i < maxy; i++) changed[i] = 1;
+                tf -> line[eocp][n] = 0;
+                tf -> line[--eocp][n] = 1;
+                s_pstrat("6", c(0, 0));
                 shift_up(tf, eocp-- + 1, maxy--, len);
             }
         change1:
+            s_pstrat("7", c(0, 0));
             for (i = ry; i <= eocp; i++) changed[i] = 1;
+            s_mvcur(c(0, 6));
+            printf("1, eocp == %d, maxy == %d, (%d, %d)",
+                    eocp, maxy, rx, ry);
+            s_pstrat(" ", c(1, 0));
             break;
         case SPC_ENTER:
-            s_mvcur(c(0, 3));
+        s_pstrat("8", c(1, 0));
             if (!rx) {
                 if (!ry) i2 = 0x01; /* cursor at (0,0) */
                 else if (tf -> line[ry - 1][n])
@@ -327,26 +351,28 @@ void ftfield(struct tfield *tf)
                 else i2 = 0x00;
             }
             if (maxy == tf -> lc - 1) break;
-            
+            s_pstrat("1", c(0, 0));
             if (i2 && i2 != 0x02) { /* 1, 3, 6, or 8 */
                 if (i2 & 0x01) /* 1 or 3 */
                     i = ry;
                 else /* 6 or 8 */
                     i = eocp + 1;
+                s_pstrat("2", c(0, 0));
                 shift_down(tf, i, maxy, len);
+                s_pstrat("3", c(0, 0));
             }
-            
+            s_pstrat("4", c(0, 0));
             tf -> line[i2 == 0x04 ? ry + 1 : ry][n] = 1;
             
             if (i2 & 0x01) /* 1 or 3 */
                 goto change2;
-            
+            s_pstrat("5", c(0, 0));
             if (i2 & 0x02) { /* 2 or 6 */
                 for (i = rx; i < len[rx]; i++)
                     tf -> line[ry + 1][i - rx] = tf -> line[ry][i];
                 goto change2;
             }
-            
+            s_pstrat("6", c(0, 0));
             /* 0 or 8 */
             postrx = tf -> width - rx;
             if (i2) { /* 8 */
@@ -430,14 +456,19 @@ void shift_down(struct tfield *tf, short top, short bottom, short *len)
     short lenbuf;
     int   i;
     
+    s_pstrat("1", c(1, 0));
     linebuf = tf -> line[++bottom];
     lenbuf  = len[bottom];
-    for (i = bottom; i > top; i++) {
+    s_pstrat("2", c(1, 0));
+    for (i = bottom; i > top; i--) {
         tf -> line[i] = tf -> line[i - 1];
         len[i] = len[i - 1];
     }
+    s_pstrat("3", c(1, 0));
     tf -> line[top] = linebuf;
     len[top] = lenbuf;
+    s_pstrat(" ", c(1, 0));
+    
     return;
 }
 
@@ -523,9 +554,7 @@ void s_pstrat(const char *str, coord c)
     LPCTSTR sstr;
     DWORD d;
     
-    i2 = strlen(str);
-    for (i = 0; i < i2; i++) sstr[i] = (*LPCTSTR) str[i];
-    WriteConsoleOutputCharacter(s_h_out, sstr, i2, s_cfc(c), &d);
+    WriteConsoleOutputCharacter(s_h_out, str, strlen(str), s_cfc(c), &d);
     
     return;
 }
