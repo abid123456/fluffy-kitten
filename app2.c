@@ -3,8 +3,8 @@
 #include <string.h>
 #include <windows.h>
 
-#define NOTHING_SPECIAL 0x00
-#define SPC_RIGHT       0x01
+#define NOTHING_SPECIAL 0x20
+#define SPC_RIGHT       0x21
 #define SPC_DOWN        0x10
 #define SPC_UP          0x11
 #define SPC_LEFT        0x02
@@ -14,8 +14,10 @@
 #define SPC_ENTER       0x06
 #define SPC_HOME        0x07
 #define SPC_ESC         0x08
+#define SPC_CTRL        0x09
 
 #define SPC_VERTICAL    0x10
+#define SPC_RIGHT_OR_NS 0x20
 
 #define F_GREY          F_BLUE | F_GREEN | F_RED
 #define B_WHITE         B_BLUE | B_GREEN | B_RED | B_INTENSITY
@@ -122,7 +124,7 @@ void ftfield(struct tfield *tf)
     char  *cpybuf;  /* string buffer  */
     char  *pbuf;    /* pointer buffer */
     
-    int i, i2, postrx;
+    int i, i2, i3, postrx;
     key k;
     
     /* init some variables */
@@ -146,37 +148,36 @@ void ftfield(struct tfield *tf)
     while (-1) {
         /*printf("%02x", k.spc);
         /* adjust eocp */
-        
-        s_mvcur(c(0, 4));
-        printf("1, eocp == %d, maxy == %d, (%d, %d)",
-                    eocp, maxy, rx, ry);
+        s_pstrat("7", c(0,0));
+        s_mvcur(c(1,0));
+        printf(",eocp==%2d,maxy==%2d", eocp, maxy);
         while (eocp != maxy && !tf -> line[eocp][n]) eocp++;
-        s_mvcur(c(0, 5));
-        printf("1, eocp == %d, maxy == %d, (%d, %d)",
-                    eocp, maxy, rx, ry);
-        s_pstrat("8", c(0, 0));
+        s_pstrat("8", c(0,0));
+        s_mvcur(c(2,1));
+        printf("eocp==%2d,maxy==%2d", eocp, maxy);
         /* update display */
+        s_pstrat("9", c(0,0));
         for (i = 0; i < tf -> lc; i++) {
-            /*if (changed[i]) {
+            /**if (changed[i]) {/**/
                 dltfield(*tf, i);
                 changed[i] = 0;
-            }*/
-            dtfield(*tf);
-            s_mvcur(c(0, 3));
-            printf("f%d", i);
+            /**}/**/
+            s_pstrat("a", c(0,0));
             s_mvcur(c(tf -> linepos[i].x + tf -> width, tf -> linepos[i].y));
-            printf("%c%c%c%x",
+            printf("%c%c%c%02x",
                     tf -> line[i][n] ? 'n' : '_',
                     i == eocp ? 'e' : '_',
                     i == maxy ? 'm' : '_',
                     len[i]);
+            s_pstrat("b", c(0,0));
         }
         s_mvcur(c(tf -> linepos[ry].x + rx, tf -> linepos[ry].y));
-        s_pstrat("9", c(0, 0));
+        s_pstrat(" ", c(0,0));
+        k = s_read_key();
+        s_pstrat("1", c(0,0));
         /* main switch */
-        switch ((k = s_read_key()).spc) {
+        switch (k.spc) {
         case NOTHING_SPECIAL:
-        s_pstrat("1", c(1, 0));
             /* insert line if needed */
             if (len[eocp] == tf -> width) {
                 if (maxy == tf -> lc - 1) break;
@@ -210,201 +211,168 @@ void ftfield(struct tfield *tf)
             len[eocp]++;
             for (i = ry; i <= eocp; i++) changed[i] = 1;
         case SPC_RIGHT:
-        s_pstrat("2", c(1, 0));
             if (rx < len[ry] && (ry == eocp || rx < tf -> width - 1)) {
                 rx++;
                 break;
             }
+            s_pstrat("2", c(0,0));
         case SPC_DOWN:
-        s_pstrat("3", c(1, 0));
             if (ry == maxy) break;
-            if (k.spc == SPC_RIGHT) rx = 0;
+            s_pstrat("3", c(0,0));
             if (tf -> line[ry++][n]) eocp++;
+            s_pstrat("4", c(0,0));
+            if (k.spc & SPC_RIGHT_OR_NS) {
+                s_pstrat("5", c(0,0));
+                rx = 0;
+                s_pstrat("6", c(0,0));
+                break;
+            }
             goto check_x_coord;
         case SPC_LEFT:
         case SPC_BACK:
-        s_pstrat("5", c(1, 0));
             if (rx) {
                 rx--;
                 goto check_key;
             }
         case SPC_UP:
-        s_pstrat("5", c(1, 0));
             if (!ry) break;
-            if (tf -> line[--ry][n]) eocp--;
+            if (tf -> line[--ry][n]) eocp = ry;
         check_x_coord:
             if ((k.spc & SPC_VERTICAL) && rx <= len[ry])
                 goto adjust_rx;
         case SPC_END:
-        s_pstrat("6", c(1, 0));
             rx = len[ry];
         adjust_rx:
             if (rx == tf -> width && !tf -> line[ry][n] && ry != maxy) rx--;
         check_key:
             if (k.spc != SPC_BACK) break;
         case SPC_DEL:
-        s_pstrat("7", c(1, 0));
-            if (rx == len[ry] && ry == maxy) break;
-            /* if a newline is deleted */
-            if (ry == eocp && rx == len[ry]) {
-                s_pstrat("1", c(0, 0));
-                s_pstrat("1", c(1, 0));
-                tf -> line[ry][n] = 0;
-                while (eocp != maxy && !tf -> line[eocp][n]) eocp++;
-                if (rx == tf -> width) {
-                    ry++;
-                    rx = 0;
+            if (!tf -> line[ry][n]) {
+                i2 = len[ry] - 1;
+                for (i = ry;  i < i2; i++)
+                    tf -> line[ry][i] = tf -> line[ry][i - 1];
+                if (ry == eocp) {
+                    tf -> line[ry][len[ry] - 1] = '\0';
                     break;
                 }
-                s_pstrat("2", c(1, 0));
-                /* initial shifting */
+                len[ry]--;
+                i3 = tf -> width - 1;
+                postrx = 1;
+            } else {
+                tf -> line[ry][n] = 0;
+                i3 = rx;
                 postrx = tf -> width - rx;
-                for (i = ry + 1; i < eocp; i++) {
-                    for (i2 = rx; i2 < tf -> width; i2++)
-                        tf -> line[i - 1][i2] = tf -> line[i][i2 - rx];
-                    for (i2 = postrx; i2 < len[i]; i2++)
-                        tf -> line[i][i2 - postrx] = tf -> line[i][i2];
-                }
-                i--;
-                s_pstrat("3", c(1, 0));
-                /* in the end */
-                if (len[eocp] > postrx) {
-                    for (i2 = rx; i2 < tf -> width; i2++)
-                        tf -> line[i][i2] = tf -> line[eocp][i2 - rx];
-                    for (i2 = postrx; tf -> line[eocp][i2]; i2++)
-                        tf -> line[eocp][i2 - postrx] = tf -> line[eocp][i2];
-                    len[i] = tf -> width;
-                    i2 = postrx;
-                    while (i2--) tf -> line[eocp][--len[eocp]] = '\0';
-                } else {
-                    for (i2 = rx; tf -> line[eocp][i2]; i2++)
-                        tf -> line[i][i2] = tf -> line[eocp][i2 - rx];
-                    len[i] += len[eocp];
-                    while (len[eocp]) tf -> line[eocp][--len[eocp]] = '\0';
-                }
-                s_pstrat("4", c(1, 0));
-            } else { /* if a character is deleted */
-                /* shift characters within the current paragraph */
-                s_pstrat("2", c(0, 0));
-                s_pstrat("1", c(1, 0));
-                i = ry;
-                if (ry != eocp) {
-                    while (-1) {
-                        for (i2 = rx + 1; i2 < tf -> width; i2++)
-                            tf -> line[i][i2 - 1] = tf -> line[i][i2];
-                        tf -> line[i][tf -> width - 1] = tf -> line[i + 1][0];
-                        if (++i == eocp) break;
-                        for (i2 = 0; i2 < rx; i2++)
-                            tf -> line[i][i2] = tf -> line[i][i2 + 1];
-                    }
-                    i2 = 0;
-                } else i2 = rx;
-                s_pstrat("2", c(1, 0));
-                len[eocp]--;
-                for (; i2 < len[eocp]; i2++)
-                    tf -> line[eocp][i2] = tf -> line[eocp][i2 + 1];
-                tf -> line[eocp][len[eocp]] = '\0';
-                s_pstrat("3", c(1, 0));
+                while (ry < maxy && !tf -> line[ry][n]) ry++;
             }
-            /* if the deletion left an empty line */
-            s_pstrat("3", c(0, 0));
-            if (!len[eocp] && maxy) {
-                s_pstrat("4", c(0, 0));
-                if (tf -> line[eocp - 1][n]) goto change1;
-                if (eocp == ry) rx = len[--ry];
-                if (eocp == maxy) {
-                    changed[eocp--] = 1;
-                    maxy--;
-                    goto change1;
-                }
-                s_pstrat("5", c(0, 0));
-                for (i = eocp; i < maxy; i++) changed[i] = 1;
-                tf -> line[eocp][n] = 0;
-                tf -> line[--eocp][n] = 1;
-                s_pstrat("6", c(0, 0));
-                shift_up(tf, eocp-- + 1, maxy--, len);
+            /* shifting */
+            for (i2 = ry + 1; i2 < eocp; i2++) {
+                for (i = i3; i < tf -> width; i++)
+                    tf -> line[i2 - 1][i] = tf -> line[i2][i - i3];
+                for (i = 0; i < i3; i++)
+                    tf -> line[i2][i] = tf -> line[i2][postrx + i];
             }
-        change1:
-            s_pstrat("7", c(0, 0));
+            if (len[eocp] <= postrx) {
+                i2 = i3 + len[eocp--];
+                for (i = i3; i < i2; i++) {
+                    tf -> line[eocp][i] = tf -> line[eocp + 1][i - i3];
+                    tf -> line[eocp + 1][i - i3] = '\0';
+                }
+                while (i < tf -> width)
+                    tf -> line[eocp][i++] = '\0';
+                len[eocp] = len[ry] + len[eocp + 1];
+                len[ry] = tf -> width;
+                len[eocp + 1] = 0;
+                shift_up(tf, eocp + 2, maxy--, len);
+            } else {
+                for (i = i3; i < tf -> width; i++)
+                    tf -> line[eocp - 1][i] = tf -> line[eocp][i - i3];
+                i2 = len[eocp] - postrx;
+                for (i = 0; i < i2; i++)
+                    tf -> line[eocp][i] = tf -> line[eocp][postrx + i];
+                while (i < len[eocp])
+                    tf -> line[eocp][i++] = '\0';
+                len[ry] = tf -> width;
+                len[eocp] -= postrx;
+            }
             for (i = ry; i <= eocp; i++) changed[i] = 1;
-            s_mvcur(c(0, 6));
-            printf("1, eocp == %d, maxy == %d, (%d, %d)",
-                    eocp, maxy, rx, ry);
-            s_pstrat(" ", c(1, 0));
             break;
         case SPC_ENTER:
-        s_pstrat("8", c(1, 0));
+            /* determine i2 */
             if (!rx) {
-                if (!ry) i2 = 0x01; /* cursor at (0,0) */
+                if (!ry) i2 = 1; /* cursor at (0,0) */
                 else if (tf -> line[ry - 1][n])
-                    i2 = 0x03; /* immediately after a newline */
+                    i2 = 3; /* immediately after a newline */
                 else {
                     tf -> line[ry - 1][n] = 1;
                     break;
                 }
             } else {
                 if (len[eocp] > rx)
-                    i2 = 0x08; /* too long to fit without a new line */
+                    i2 = 8; /* too long to fit without a new line */
                 else if (ry == eocp) i2 = (ry == maxy) ?
-                0x02: /* cursor at last line */
-                0x06; /* cursor in a line with a newline */
-                else i2 = 0x00;
+                2:    /* cursor at last line */
+                14;   /* cursor in a line with a newline */
+                else i2 = 0;
             }
             if (maxy == tf -> lc - 1) break;
-            s_pstrat("1", c(0, 0));
-            if (i2 && i2 != 0x02) { /* 1, 3, 6, or 8 */
-                if (i2 & 0x01) /* 1 or 3 */
+            s_mvcur(c(0,1));
+            printf("%x,", i2);
+            /* using i2 */
+            if (i2 && i2 != 2) { /* 1, 3, 14, or 8 */
+                if (i2 & 1) /* 1 or 3 */
                     i = ry;
-                else /* 6 or 8 */
+                else /* 14 or 8 */
                     i = eocp + 1;
-                s_pstrat("2", c(0, 0));
                 shift_down(tf, i, maxy, len);
-                s_pstrat("3", c(0, 0));
             }
-            s_pstrat("4", c(0, 0));
-            tf -> line[i2 == 0x04 ? ry + 1 : ry][n] = 1;
+            if (i2 == 14 || (i2 == 8 && ry == eocp && ry != maxy))
+                i = ry + 1;
+            else i = ry;
+            tf -> line[i][n] = 1;
             
-            if (i2 & 0x01) /* 1 or 3 */
+            if (i2 & 1) /* 1 or 3 */
                 goto change2;
-            s_pstrat("5", c(0, 0));
-            if (i2 & 0x02) { /* 2 or 6 */
+            if (i2 & 2) { /* 2 or 14 */
                 for (i = rx; i < len[rx]; i++)
                     tf -> line[ry + 1][i - rx] = tf -> line[ry][i];
                 goto change2;
             }
-            s_pstrat("6", c(0, 0));
+            
             /* 0 or 8 */
             postrx = tf -> width - rx;
             if (i2) { /* 8 */
-                tf -> line[eocp + 1][n] = 1;
-                if (eocp != ry) tf -> line[eocp][n] = 0;
                 for (i = rx; i < len[eocp]; i++) {
                     tf -> line[eocp + 1][i - rx] = tf -> line[eocp][i];
                     tf -> line[eocp][i] = '\0';
                 }
-                len[eocp] += len[eocp - 1] - rx;
                 i = eocp;
-                len[--eocp] = rx;
             } else { /* 0 */
                 i = eocp - 1;
-                for (i2 = len[eocp] + postrx - 1; i2 >= postrx; i2--)
-                    tf -> line[eocp][i2] = tf -> line[eocp][i2 - postrx];
-                for (i2 = rx; i2 < tf -> width; i2++)
-                    tf -> line[eocp][i2 - rx] = tf -> line[i][i2];
+                for (i3 = len[eocp] + postrx - 1; i3 >= postrx; i3--)
+                    tf -> line[eocp][i3] = tf -> line[eocp][i3 - postrx];
+                for (i3 = rx; i3 < tf -> width; i3++)
+                    tf -> line[eocp][i3 - rx] = tf -> line[i][i3];
             }
             /* shifting within current paragraph */
             while (i > ry) {
-                for (i2 = tf -> width - 1; i2 >= postrx; i2--)
-                    tf -> line[i][i2] = tf -> line[i][i2 - postrx];
-                for (i2 = rx; i2 < tf -> width; i2++)
-                    tf -> line[i][i2 - rx] = tf -> line[i - 1][i2];
+                for (i3 = tf -> width - 1; i3 >= postrx; i3--)
+                    tf -> line[i][i3] = tf -> line[i][i3 - postrx];
+                for (i3 = rx; i3 < tf -> width; i3++)
+                    tf -> line[i][i3 - rx] = tf -> line[i - 1][i3];
                 i--;
             }
             for (i = rx; i < tf -> width; i++) tf -> line[ry][i] = '\0';
-            len[eocp] += postrx;
+            if (ry != eocp) {
+                len[eocp] += len[ry] - rx;
+                if (len[eocp] > tf -> width) {
+                    len[eocp + 1] = len[eocp] - tf -> width;
+                    len[eocp] = tf -> width;
+                }
+            } else len[ry + 1] += len[ry] - rx;
             len[ry] = rx;
         change2:
-            for (i = maxy++; i >= ry; i--) changed[i] = 1;
+            if (i2) maxy++;
+            for (i = maxy; i >= ry; i--) changed[i] = 1;
             eocp = ++ry;
         case SPC_HOME:
             rx = 0;
@@ -510,16 +478,17 @@ void s_prepare()
 key s_read_key()
 {
     const short corr_arr[][2] = {
-        {VK_RIGHT  , SPC_RIGHT},
-        {VK_DOWN   , SPC_DOWN},
-        {VK_UP     , SPC_UP},
-        {VK_LEFT   , SPC_LEFT},
-        {VK_BACK   , SPC_BACK},
-        {VK_END    , SPC_END},
-        {VK_DELETE , SPC_DEL},
-        {VK_RETURN , SPC_ENTER},
-        {VK_HOME   , SPC_HOME},
-        {VK_ESCAPE , SPC_ESC},
+        {VK_RIGHT   , SPC_RIGHT },
+        {VK_DOWN    , SPC_DOWN  },
+        {VK_UP      , SPC_UP    },
+        {VK_LEFT    , SPC_LEFT  },
+        {VK_BACK    , SPC_BACK  },
+        {VK_END     , SPC_END   },
+        {VK_DELETE  , SPC_DEL   },
+        {VK_RETURN  , SPC_ENTER },
+        {VK_HOME    , SPC_HOME  },
+        {VK_ESCAPE  , SPC_ESC   },
+        {VK_CONTROL , SPC_CTRL  }
     };
     INPUT_RECORD ir;
     DWORD d;
