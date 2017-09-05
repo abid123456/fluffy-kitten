@@ -243,7 +243,6 @@ void ftfield(struct tfield *tf)
             if (k.spc != SPC_BACK) break;
         case SPC_DEL:
             if (ry == maxy && rx == len[ry]) break;
-            s_pstrat("2", c(0,0));
             if (!tf -> line[ry][n] || rx != len[ry]) {
                 /* deleting a character */
                 i2 = len[ry] - 1;
@@ -258,17 +257,11 @@ void ftfield(struct tfield *tf)
                 i3 = tf -> width - 1;
                 postrx = 1;
             } else { /* deleting a \n */
-                s_pstrat("3", c(0,0));
                 tf -> line[ry][n] = 0;
-                s_pstrat("4", c(0,0));
                 i3 = rx;
-                s_pstrat("5", c(0,0));
                 postrx = tf -> width - rx;
-                s_pstrat("6", c(0,0));
-                while (ry < maxy && !tf -> line[ry][n]) ry++;
-                s_pstrat("7", c(0,0));
+                while (eocp != maxy && !tf -> line[eocp][n]) eocp++;
             }
-            s_pstrat("8", c(0,0));
             /* shifting */
             for (i2 = ry + 1; i2 < eocp; i2++) {
                 for (i = i3; i < tf -> width; i++)
@@ -285,10 +278,12 @@ void ftfield(struct tfield *tf)
                 while (i < tf -> width)
                     tf -> line[eocp][i++] = '\0';
                 len[eocp] = len[ry] + len[eocp + 1];
-                len[ry] = tf -> width;
                 len[eocp + 1] = 0;
-                tf -> line[eocp + 1][n] = 0;
-                tf -> line[eocp][n] = 1;
+                if (eocp != ry) len[ry] = tf -> width;
+                if (eocp + 1 != maxy) {
+                    tf -> line[eocp + 1][n] = 0;
+                    tf -> line[eocp][n] = 1;
+                }
                 shift_up(tf, eocp + 2, maxy--, len);
             } else {
                 for (i = i3; i < tf -> width; i++)
