@@ -432,7 +432,7 @@ void dltfield(struct tfield tf, short y)
     s_mvcur(c(0, 2));
     printf("buf=%d", buf);
     #endif
-    s_pcarrat(tf.line[y], tf.width, tf.linepos[y]);
+    s_pcarrat(carr, tf.width, tf.linepos[y]);
     
     return;
 }
