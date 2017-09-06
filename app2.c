@@ -389,27 +389,6 @@ void ftfield(struct tfield *tf)
 void dltfield(struct tfield tf, short y)
 {
     #ifdef ATTRIBUTE
-    /**
-    const char_info ci = {
-        '_',
-        F_GREY | B_WHITE
-    };
-    
-    char_info *cia;
-    int x;
-    
-    cia = malloc(tf.width * sizeof *cia);
-    
-    for (x = 0; x < tf.width; x++) {
-        cia[x].c = tf.line[y][x];
-        if (cia[x].c == ' ' || cia[x].c == '\0') {
-            cia[x] = ci;
-            continue;
-        }
-        cia[x].a = B_WHITE | F_BLACK;
-    }
-    s_printcis(cia, tf.width, tf.linepos[y]);
-    /**/
     DWORD buf;
     WORD *attribute;
     int i;
