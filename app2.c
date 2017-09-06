@@ -385,6 +385,7 @@ void ftfield(struct tfield *tf)
     return;
 }
 
+#define ATTRIBUTE
 void dltfield(struct tfield tf, short y)
 {
     #ifdef ATTRIBUTE
@@ -409,12 +410,20 @@ void dltfield(struct tfield tf, short y)
     }
     s_printcis(cia, tf.width, tf.linepos[y]);
     /**/
+    DWORD buf;
     WORD *attribute;
     int i;
     
     attribute = malloc(tf.width * sizeof *attribute);
-    for (i = 0; i < )
-    WriteConsoleOutputAttribute(h_out, 
+    for (i = 0; i < tf.width; i++) {
+        attribute[i] = B_WHITE;
+        if (tf.line[y][i] == '\0') attribute[i] |= F_GREY;
+        else attribute[i] |= F_BLACK;
+    }
+    WriteConsoleOutputAttribute(s_h_out, attribute, tf.width,
+                                s_cfc(tf.linepos[y]), &buf);
+    s_mvcur(c(0, 2));
+    printf("buf=%d", buf);
     #endif
     s_pcarrat(tf.line[y], tf.width, tf.linepos[y]);
     
