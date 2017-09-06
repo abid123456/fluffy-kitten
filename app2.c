@@ -413,12 +413,19 @@ void dltfield(struct tfield tf, short y)
     DWORD buf;
     WORD *attribute;
     int i;
+    char *carr;
     
     attribute = malloc(tf.width * sizeof *attribute);
+    carr = malloc(tf.width * sizeof *carr);
     for (i = 0; i < tf.width; i++) {
         attribute[i] = B_WHITE;
-        if (tf.line[y][i] == '\0') attribute[i] |= F_GREY;
-        else attribute[i] |= F_BLACK;
+        if (tf.line[y][i] == '\0') {
+            attribute[i] |= F_GREY;
+            carr[i] = '_';
+        } else {
+            attribute[i] |= F_BLACK;
+            carr[i] = tf.line[y][i];
+        }
     }
     WriteConsoleOutputAttribute(s_h_out, attribute, tf.width,
                                 s_cfc(tf.linepos[y]), &buf);
