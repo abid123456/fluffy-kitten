@@ -408,8 +408,6 @@ void dltfield(struct tfield tf, short y)
     }
     WriteConsoleOutputAttribute(s_h_out, attribute, tf.width,
                                 s_cfc(tf.linepos[y]), &buf);
-    s_mvcur(c(0, 2));
-    printf("buf=%d", buf);
     #endif
     s_pcarrat(carr, tf.width, tf.linepos[y]);
     
