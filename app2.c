@@ -65,6 +65,7 @@ coord c(short x, short y);
 void s_prepare();
 key  s_read_key();
 void s_pstrat(const char *str, coord c);
+void s_pcarrat(const char *str, int len, coord c);
 void s_printcis(char_info *arr, int len, coord c);
 void s_mvcur(coord c);
 
@@ -172,7 +173,7 @@ void ftfield(struct tfield *tf)
             s_pstrat("b", c(0,0));
         }
         s_mvcur(c(tf -> linepos[ry].x + rx, tf -> linepos[ry].y));
-        s_pstrat(" ", c(0,0));
+        /*s_pstrat(" ", c(0,0));*/
         k = s_read_key();
         s_pstrat("1", c(0,0));
         /* main switch */
@@ -386,6 +387,8 @@ void ftfield(struct tfield *tf)
 
 void dltfield(struct tfield tf, short y)
 {
+    #ifdef ATTRIBUTE
+    /**
     const char_info ci = {
         '_',
         F_GREY | B_WHITE
@@ -405,6 +408,15 @@ void dltfield(struct tfield tf, short y)
         cia[x].a = B_WHITE | F_BLACK;
     }
     s_printcis(cia, tf.width, tf.linepos[y]);
+    /**/
+    WORD *attribute;
+    int i;
+    
+    attribute = malloc(tf.width * sizeof *attribute);
+    for (i = 0; i < )
+    WriteConsoleOutputAttribute(h_out, 
+    #endif
+    s_pcarrat(tf.line[y], tf.width, tf.linepos[y]);
     
     return;
 }
@@ -524,6 +536,16 @@ void s_pstrat(const char *str, coord c)
     DWORD d;
     
     WriteConsoleOutputCharacter(s_h_out, str, strlen(str), s_cfc(c), &d);
+    
+    return;
+}
+
+void s_pcarrat(const char *str, int len, coord c)
+{
+    LPCTSTR sstr;
+    DWORD d;
+    
+    WriteConsoleOutputCharacter(s_h_out, str, len, s_cfc(c), &d);
     
     return;
 }
