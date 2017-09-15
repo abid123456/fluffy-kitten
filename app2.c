@@ -252,6 +252,21 @@ void ftfield(struct tfield *tf)
                 if (ry == eocp) {
                     tf -> line[ry][--len[ry]] = '\0';
                     changed[ry] = 1;
+                    if (!len[ry] && ry) if (!tf -> line[ry - 1][n]) {
+                        if (tf -> line[ry][n]) {
+                            tf -> line[ry][n] = 0;
+                            tf -> line[ry - 1][n] = 1;
+                        }
+                        if (eocp != maxy) {
+                            shift_up(tf, eocp + 1, maxy, len);
+                            for (i = eocp + 1; i <= maxy; i++)
+                                changed[i] = 1;
+                        }
+                        rx = tf -> width;
+                        ry--;
+                        eocp--;
+                        maxy--;
+                    }
                     break;
                 }
                 len[ry]--;
