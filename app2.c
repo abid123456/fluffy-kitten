@@ -337,7 +337,7 @@ void ftfield(struct tfield *tf)
             if (i2 & 1) /* 1 or 3 */
                 goto change2;
             if (i2 & 2) { /* 2 or 14 */
-                for (i = rx; i < len[rx]; i++)
+                for (i = rx; i < len[ry]; i++)
                     tf -> line[ry + 1][i - rx] = tf -> line[ry][i];
                 goto change2;
             }
