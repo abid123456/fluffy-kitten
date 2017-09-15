@@ -300,8 +300,10 @@ void ftfield(struct tfield *tf)
                     tf -> line[eocp + 1][n] = 0;
                     tf -> line[eocp][n] = 1;
                 }
-                shift_up(tf, eocp + 2, maxy--, len);
-                changed[eocp + 1] = 1;
+                shift_up(tf, eocp + 2, maxy, len);
+                for (i = eocp + 1; i < maxy; i++)
+                    changed[i] = 1;
+                maxy--;
             } else {
                 for (i = i3; i < tf -> width; i++)
                     tf -> line[eocp - 1][i] = tf -> line[eocp][i - i3];
