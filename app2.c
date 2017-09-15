@@ -319,6 +319,8 @@ void ftfield(struct tfield *tf)
                 else i2 = 0;
             }
             if (maxy == tf -> lc - 1) break;
+            s_mvcur(c(0,1));
+            printf("%2d",i2);
             /* using i2 */
             if (i2 && i2 != 2) { /* 1, 3, 14, or 8 */
                 if (i2 & 1) /* 1 or 3 */
