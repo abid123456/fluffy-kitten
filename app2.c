@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -160,10 +159,10 @@ void ftfield(struct tfield *tf)
         /* update display */
         s_pstrat("9", c(0,0));
         for (i = 0; i < tf -> lc; i++) {
-            /**if (changed[i]) {/**/
+            if (changed[i]) {
                 dltfield(*tf, i);
                 changed[i] = 0;
-            /**}/**/
+            }
             s_pstrat("a", c(0,0));
             s_mvcur(c(tf -> linepos[i].x + tf -> width, tf -> linepos[i].y));
             printf("%c%c%c%02x",
@@ -253,6 +252,21 @@ void ftfield(struct tfield *tf)
                 if (ry == eocp) {
                     tf -> line[ry][--len[ry]] = '\0';
                     changed[ry] = 1;
+                    if (!len[ry] && ry) if (!tf -> line[ry - 1][n]) {
+                        if (tf -> line[ry][n]) {
+                            tf -> line[ry][n] = 0;
+                            tf -> line[ry - 1][n] = 1;
+                        }
+                        if (eocp != maxy) {
+                            shift_up(tf, eocp + 1, maxy, len);
+                            for (i = eocp + 1; i <= maxy; i++)
+                                changed[i] = 1;
+                        }
+                        rx = tf -> width;
+                        ry--;
+                        eocp--;
+                        maxy--;
+                    }
                     break;
                 }
                 len[ry]--;
@@ -286,7 +300,10 @@ void ftfield(struct tfield *tf)
                     tf -> line[eocp + 1][n] = 0;
                     tf -> line[eocp][n] = 1;
                 }
-                shift_up(tf, eocp + 2, maxy--, len);
+                shift_up(tf, eocp + 2, maxy, len);
+                for (i = eocp + 1; i < maxy; i++)
+                    changed[i] = 1;
+                maxy--;
             } else {
                 for (i = i3; i < tf -> width; i++)
                     tf -> line[eocp - 1][i] = tf -> line[eocp][i - i3];
@@ -319,6 +336,8 @@ void ftfield(struct tfield *tf)
                 else i2 = 0;
             }
             if (maxy == tf -> lc - 1) break;
+            s_mvcur(c(0,1));
+            printf("%2d",i2);
             /* using i2 */
             if (i2 && i2 != 2) { /* 1, 3, 14, or 8 */
                 if (i2 & 1) /* 1 or 3 */
@@ -335,7 +354,7 @@ void ftfield(struct tfield *tf)
             if (i2 & 1) /* 1 or 3 */
                 goto change2;
             if (i2 & 2) { /* 2 or 14 */
-                for (i = rx; i < len[rx]; i++)
+                for (i = rx; i < len[ry]; i++)
                     tf -> line[ry + 1][i - rx] = tf -> line[ry][i];
                 goto change2;
             }
