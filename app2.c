@@ -159,10 +159,10 @@ void ftfield(struct tfield *tf)
         /* update display */
         s_pstrat("9", c(0,0));
         for (i = 0; i < tf -> lc; i++) {
-            if (changed[i]) {
+            /**/if (changed[i]) {/**/
                 dltfield(*tf, i);
                 changed[i] = 0;
-            }
+            /**/}/**/
             s_pstrat("a", c(0,0));
             s_mvcur(c(tf -> linepos[i].x + tf -> width, tf -> linepos[i].y));
             printf("%c%c%c%02x",
