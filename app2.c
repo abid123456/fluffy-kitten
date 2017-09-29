@@ -56,8 +56,8 @@ struct tfield {
 
 struct tfield *tfield(short width, short lc, coord *linepos);
 void  ftfield(struct tfield *tf);
-void  dltfield(struct tfield tf, short y);
-void  dtfield(struct tfield tf);
+void  dltfield(struct tfield *tf, short y);
+void  dtfield(struct tfield *tf);
 void  shift_down(struct tfield *tf, short top, short bottom, short *len);
 void  shift_up(struct tfield *tf, short top, short bottom, short *len);
 coord c(short x, short y);
@@ -66,7 +66,7 @@ void s_prepare();
 key  s_read_key();
 void s_pstrat(const char *str, coord c);
 void s_pcarrat(const char *str, int len, coord c);
-void s_printcis(char_info *arr, int len, coord c);
+void s_printcis(char_info *str, int len, coord c);
 void s_mvcur(coord c);
 
 CHAR_INFO  s_ci(char_info ci);
@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
     tf = tfield(10, 10, NULL);
     for (i = 0; i < tf -> lc; i++)
         tf -> linepos[i] = c(10, i + 10);
-    dtfield(*tf);
+    dtfield(tf);
     ftfield(tf);
     
     return 0;
@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
 struct tfield *tfield(short width, short lc, coord *linepos)
 {
     struct tfield *tf;
-    int i, i2;
+    int ix, iy;
     
     tf = malloc(sizeof *tf);
     tf -> width   = width;
@@ -102,12 +102,13 @@ struct tfield *tfield(short width, short lc, coord *linepos)
     tf -> linepos = malloc(lc * sizeof *tf -> linepos);
     tf -> line    = malloc(lc * sizeof *tf -> line);
     
-    for (i = 0; i < lc; i++) {
-        tf -> line[i] = malloc((width + 1) * sizeof **tf -> line);
-        for (i2 = 0; i2 <= width; i2++) tf -> line[i][i2] = '\0';
+    for (iy = 0; iy < lc; iy++) {
+        tf -> line[iy] = malloc((width + 1) * sizeof **tf -> line);
+        for (ix = 0; ix < width; ix++) tf -> line[iy][ix] = '\0';
+        tf -> line[iy][width] = 0;
     }
     if (linepos != NULL)
-        for (i = 0; i < lc; i++) tf -> linepos[i] = linepos[i];
+        for (iy = 0; iy < lc; iy++) tf -> linepos[iy] = linepos[iy];
     
     return tf;
 }
@@ -121,9 +122,6 @@ void ftfield(struct tfield *tf)
     
     short *len;     /* lengths of lines                                */
     char  *changed; /* whether lines have changed and must be rendered */
-    
-    char  *cpybuf;  /* string buffer  */
-    char  *pbuf;    /* pointer buffer */
     
     int i, i2, i3, postrx;
     key k;
@@ -147,7 +145,7 @@ void ftfield(struct tfield *tf)
     
     /* main loop */
     while (-1) {
-        /*printf("%02x", k.spc);
+        /** printf("%02x", k.spc);
         /* adjust eocp */
         s_pstrat("7", c(0,0));
         s_mvcur(c(1,0));
@@ -160,7 +158,7 @@ void ftfield(struct tfield *tf)
         s_pstrat("9", c(0,0));
         for (i = 0; i < tf -> lc; i++) {
             if (changed[i]) {
-                dltfield(*tf, i);
+                dltfield(tf, i);
                 changed[i] = 0;
             }
             s_pstrat("a", c(0,0));
@@ -406,39 +404,48 @@ void ftfield(struct tfield *tf)
 }
 
 #define ATTRIBUTE
-void dltfield(struct tfield tf, short y)
+void dltfield(struct tfield *tf, short y)
 {
-    #ifdef ATTRIBUTE
     DWORD buf;
-    WORD *attribute;
-    int i;
-    char *carr;
     
-    attribute = malloc(tf.width * sizeof *attribute);
-    carr = malloc(tf.width * sizeof *carr);
-    for (i = 0; i < tf.width; i++) {
-        attribute[i] = B_WHITE;
-        if (tf.line[y][i] == '\0') {
-            attribute[i] |= F_GREY;
-            carr[i] = '_';
+  #ifdef ATTRIBUTE
+    WORD *attribute;
+  #endif
+    char *carr;
+    int x;
+    
+    attribute = malloc(tf -> width * sizeof *attribute);
+    carr = malloc(tf -> width * sizeof *carr);
+    for (x = 0; x < tf -> width; x++) {
+      #ifdef ATTRIBUTE
+        attribute[x] = B_WHITE;
+      #endif
+        if (tf -> line[y][x] == '\0') {
+          #ifdef ATTRIBUTE
+            attribute[x] |= F_GREY;
+          #endif
+            carr[x] = '_';
         } else {
-            attribute[i] |= F_BLACK;
-            carr[i] = tf.line[y][i];
+          #ifdef ATTRIBUTE
+            attribute[x] |= F_BLACK;
+          #endif
+            carr[x] = tf -> line[y][x];
         }
     }
-    WriteConsoleOutputAttribute(s_h_out, attribute, tf.width,
-                                s_cfc(tf.linepos[y]), &buf);
-    #endif
-    s_pcarrat(carr, tf.width, tf.linepos[y]);
+  #ifdef ATTRIBUTE
+    WriteConsoleOutputAttribute(s_h_out, attribute, tf -> width,
+                                s_cfc(tf -> linepos[y]), &buf);
+  #endif
+    s_pcarrat(carr, tf -> width, tf -> linepos[y]);
     
     return;
 }
 
-void dtfield(struct tfield tf)
+void dtfield(struct tfield *tf)
 {
     int i;
     
-    for (i = 0; i < tf.lc; i++) dltfield(tf, i);
+    for (i = 0; i < tf -> lc; i++) dltfield(tf, i);
     
     return;
 }
@@ -563,17 +570,17 @@ void s_pcarrat(const char *str, int len, coord c)
     return;
 }
 
-void s_printcis(char_info *arr, int len, coord c)
+void s_printcis(char_info *str, int len, coord c)
 {
+    CHAR_INFO *scis;
     SMALL_RECT ssr;
-    CHAR_INFO *sci;
-    DWORD d;
-    int   i;
+    int i;
     
-    sci = malloc(len * sizeof *sci);
+    scis = malloc(len * sizeof *scis);
     ssr = s_sr(c.x, c.y, c.x + i - 1, c.y);
-    for (i = 0; i < len; i++) sci[i] = s_ci(arr[i]);
-    WriteConsoleOutput(s_h_out, sci, s_c(len, 1), s_c(0, 0), &ssr);
+    for (i = 0; i < len; i++) scis[i] = s_ci(str[i]);
+    WriteConsoleOutput(s_h_out, scis, s_c(len, 1), s_c(0, 0), &ssr);
+    free(scis);
     
     return;
 }
@@ -581,6 +588,7 @@ void s_printcis(char_info *arr, int len, coord c)
 void s_mvcur(coord c)
 {
     SetConsoleCursorPosition(s_h_out, s_cfc(c));
+    
     return;
 }
 
