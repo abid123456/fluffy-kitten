@@ -412,7 +412,7 @@ void dltfield(struct tfield *tf, short y)
     WORD *attribute;
   #endif
     char *carr;
-    int x;
+    int   x;
     
     attribute = malloc(tf -> width * sizeof *attribute);
     carr = malloc(tf -> width * sizeof *carr);
@@ -456,18 +456,14 @@ void shift_down(struct tfield *tf, short top, short bottom, short *len)
     short lenbuf;
     int   i;
     
-    s_pstrat("1", c(1, 0));
-    linebuf = tf -> line[++bottom];
-    lenbuf  = len[bottom];
-    s_pstrat("2", c(1, 0));
-    for (i = bottom; i > top; i--) {
+    linebuf = tf -> line[bottom + 1];
+    lenbuf  = len[bottom + 1];
+    for (i = bottom + 1; i > top; i--) {
         tf -> line[i] = tf -> line[i - 1];
         len[i] = len[i - 1];
     }
-    s_pstrat("3", c(1, 0));
     tf -> line[top] = linebuf;
     len[top] = lenbuf;
-    s_pstrat(" ", c(1, 0));
     
     return;
 }
@@ -478,9 +474,9 @@ void shift_up(struct tfield *tf, short top, short bottom, short *len)
     short lenbuf;
     int   i;
     
-    linebuf = tf -> line[--top];
-    lenbuf  = len[top];
-    for (i = top; i < bottom; i++) {
+    linebuf = tf -> line[top - 1];
+    lenbuf  = len[top - 1];
+    for (i = top - 1; i < bottom; i++) {
         tf -> line[i] = tf -> line[i + 1];
         len[i] = len[i + 1];
     }
