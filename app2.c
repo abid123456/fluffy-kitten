@@ -121,24 +121,23 @@ struct tfield *tfield(short width, short lc, coord *linepos)
 
 void ftfield(struct tfield *tf)
 {
+    short *len;     /* lengths of lines                                */
+    char  *changed; /* whether lines have changed and must be rendered */
+    
     short  rx, ry;  /* cursor coordinates in tf                 */
     short  eocp;    /* y-coordinate of end of current paragraph */
     short  n;       /* used to determine newline presence       */
     short  maxy;    /* highest used y-coordinate                */
     
-    short *len;     /* lengths of lines                                */
-    char  *changed; /* whether lines have changed and must be rendered */
-    
     int i, i2, i3, postrx;
     key k;
     
     /* init some variables */
+    len     = calloc(tf -> lc, sizeof *len);
+    changed = calloc(tf -> lc, sizeof *changed);
     rx = ry = 0;
     eocp    = 0;
     n       = tf -> width;
-    
-    len     = calloc(tf -> lc, sizeof *len);
-    changed = calloc(tf -> lc, sizeof *changed);
     
     /* init len members and maxy */
     for (i = 0; i < tf -> lc; i++) {
