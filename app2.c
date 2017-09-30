@@ -129,7 +129,7 @@ void ftfield(struct tfield *tf)
     short  n;       /* used to determine newline presence       */
     short  maxy;    /* highest used y-coordinate                */
     
-    int i, i2, i3, postrx;
+    int i, i2, ix, iy, ix_max, postrx;
     key k;
     
     /* init some variables */
@@ -140,17 +140,17 @@ void ftfield(struct tfield *tf)
     n       = tf -> width;
     
     /* init len members and maxy */
-    for (i = 0; i < tf -> lc; i++) {
-        len[i] = strlen(tf -> line[i]);
-        if (!len[i] && !tf -> line[i][n]) {
-            maxy = i ? i - 1 : 0;
+    for (iy = 0; iy < tf -> lc; iy++) {
+        len[iy] = strlen(tf -> line[iy]);
+        if (!len[iy] && !tf -> line[iy][n]) {
+            maxy = iy ? iy - 1 : 0;
             break;
         }
     }
     
     /* main loop */
     while (-1) {
-        /** printf("%02x", k.spc);
+        /** printf("%02x", k.spc); /**/
         /* adjust eocp */
         s_pstrat("7", c(0,0));
         s_mvcur(c(1,0));
@@ -161,18 +161,18 @@ void ftfield(struct tfield *tf)
         printf("eocp==%2d,maxy==%2d", eocp, maxy);
         /* update display */
         s_pstrat("9", c(0,0));
-        for (i = 0; i < tf -> lc; i++) {
-            if (changed[i]) {
-                dltfield(tf, i);
-                changed[i] = 0;
+        for (iy = 0; iy < tf -> lc; iy++) {
+            if (changed[iy]) {
+                dltfield(tf, iy);
+                changed[iy] = 0;
             }
             s_pstrat("a", c(0,0));
-            s_mvcur(c(tf -> linepos[i].x + tf -> width, tf -> linepos[i].y));
+            s_mvcur(c(tf -> linepos[iy].x + tf -> width, tf -> linepos[iy].y));
             printf("%c%c%c%02x",
-                    tf -> line[i][n] ? 'n' : '_',
-                    i == eocp ? 'e' : '_',
-                    i == maxy ? 'm' : '_',
-                    len[i]);
+                    tf -> line[iy][n] ? 'n' : '_',
+                    iy == eocp ? 'e' : '_',
+                    iy == maxy ? 'm' : '_',
+                    len[iy]);
             s_pstrat("b", c(0,0));
         }
         s_mvcur(c(tf -> linepos[ry].x + rx, tf -> linepos[ry].y));
@@ -190,7 +190,7 @@ void ftfield(struct tfield *tf)
                     tf -> line[eocp - 1][n] = 0;
                     tf -> line[eocp][n] = 1;
                 }
-                for (i = maxy; i > eocp; i--) changed[i] = 1;
+                for (iy = maxy; iy > eocp; iy--) changed[iy] = 1;
                 if (rx == tf -> width) {
                     rx = 0;
                     ry++;
@@ -198,22 +198,22 @@ void ftfield(struct tfield *tf)
             }
             /* shift characters within current paragraph */
             if (ry != eocp) {
-                for (i = len[eocp]; i; i--)
-                    tf -> line[eocp][i] = tf -> line[eocp][i - 1];
+                for (ix = len[eocp]; ix; ix--)
+                    tf -> line[eocp][ix] = tf -> line[eocp][ix - 1];
                 tf -> line[eocp][0] = tf -> line[eocp - 1][tf -> width - 1];
-                for (i2 = eocp - 1; i2 > ry; i2--) {
-                    for (i = tf -> width - 1; i; i--)
-                        tf -> line[i2][i] = tf -> line[i2][i - 1];
-                    tf -> line[i2][0] = tf -> line[i2 - 1][tf -> width - 1];
+                for (iy = eocp - 1; iy > ry; iy--) {
+                    for (ix = tf -> width - 1; ix; ix--)
+                        tf -> line[iy][ix] = tf -> line[iy][ix - 1];
+                    tf -> line[iy][0] = tf -> line[iy - 1][tf -> width - 1];
                 }
-                i = tf -> width - 1;
-            } else i = len[ry];
-            for (; i > rx; i--)
-                tf -> line[ry][i] = tf -> line[ry][i - 1];
+                ix = tf -> width - 1;
+            } else ix = len[ry];
+            for (; ix > rx; ix--)
+                tf -> line[ry][ix] = tf -> line[ry][ix - 1];
             /* insert character */
             tf -> line[ry][rx] = k.c;
             len[eocp]++;
-            for (i = ry; i <= eocp; i++) changed[i] = 1;
+            for (iy = ry; iy <= eocp; iy++) changed[iy] = 1;
         case SPC_RIGHT:
             if (rx < len[ry] && (ry == eocp || rx < tf -> width - 1)) {
                 rx++;
@@ -249,11 +249,11 @@ void ftfield(struct tfield *tf)
             if (ry == maxy && rx == len[ry]) break;
             if (!tf -> line[ry][n] || rx != len[ry]) {
                 /* deleting a character */
-                i2 = len[ry] - 1;
-                for (i = rx;  i < i2; i++)
-                    tf -> line[ry][i] = tf -> line[ry][i + 1];
+                len[ry]--;
+                for (ix = rx;  ix < len[ry]; ix++)
+                    tf -> line[ry][ix] = tf -> line[ry][ix + 1];
                 if (ry == eocp) {
-                    tf -> line[ry][--len[ry]] = '\0';
+                    tf -> line[ry][len[ry]] = '\0';
                     changed[ry] = 1;
                     if (!len[ry] && ry) if (!tf -> line[ry - 1][n]) {
                         if (tf -> line[ry][n]) {
@@ -262,8 +262,8 @@ void ftfield(struct tfield *tf)
                         }
                         if (eocp != maxy) {
                             shift_up(tf, eocp + 1, maxy, len);
-                            for (i = eocp + 1; i <= maxy; i++)
-                                changed[i] = 1;
+                            for (iy = eocp + 1; iy <= maxy; iy++)
+                                changed[iy] = 1;
                         }
                         rx = tf -> width;
                         ry--;
@@ -273,29 +273,29 @@ void ftfield(struct tfield *tf)
                     break;
                 }
                 len[ry]--;
-                i3 = tf -> width - 1;
+                i2 = tf -> width - 1;
                 postrx = 1;
             } else { /* deleting a \n */
                 tf -> line[ry][n] = 0;
-                i3 = rx;
+                i2 = rx;
                 postrx = tf -> width - rx;
                 while (eocp != maxy && !tf -> line[eocp][n]) eocp++;
             }
             /* shifting */
-            for (i2 = ry + 1; i2 < eocp; i2++) {
-                for (i = i3; i < tf -> width; i++)
-                    tf -> line[i2 - 1][i] = tf -> line[i2][i - i3];
-                for (i = 0; i < i3; i++)
-                    tf -> line[i2][i] = tf -> line[i2][postrx + i];
+            for (iy = ry + 1; iy < eocp; iy++) {
+                for (ix = i2; ix < tf -> width; ix++)
+                    tf -> line[iy - 1][ix] = tf -> line[iy][ix - i2];
+                for (ix = 0; ix < i2; ix++)
+                    tf -> line[iy][ix] = tf -> line[iy][postrx + ix];
             }
             if (len[eocp] <= postrx) {
-                i2 = i3 + len[eocp--];
-                for (i = i3; i < i2; i++) {
-                    tf -> line[eocp][i] = tf -> line[eocp + 1][i - i3];
-                    tf -> line[eocp + 1][i - i3] = '\0';
+                ix_max = i2 + len[eocp--];
+                for (ix = i2; ix < ix_max; ix++) {
+                    tf -> line[eocp][ix] = tf -> line[eocp + 1][ix - i2];
+                    tf -> line[eocp + 1][ix - i2] = '\0';
                 }
-                while (i < tf -> width)
-                    tf -> line[eocp][i++] = '\0';
+                while (ix < tf -> width)
+                    tf -> line[eocp][ix++] = '\0';
                 len[eocp] = len[ry] + len[eocp + 1];
                 len[eocp + 1] = 0;
                 if (eocp != ry) len[ry] = tf -> width;
@@ -304,21 +304,21 @@ void ftfield(struct tfield *tf)
                     tf -> line[eocp][n] = 1;
                 }
                 shift_up(tf, eocp + 2, maxy, len);
-                for (i = eocp + 1; i < maxy; i++)
-                    changed[i] = 1;
+                for (iy = eocp + 1; iy < maxy; iy++)
+                    changed[iy] = 1;
                 maxy--;
             } else {
-                for (i = i3; i < tf -> width; i++)
-                    tf -> line[eocp - 1][i] = tf -> line[eocp][i - i3];
-                i2 = len[eocp] - postrx;
-                for (i = 0; i < i2; i++)
-                    tf -> line[eocp][i] = tf -> line[eocp][postrx + i];
-                while (i < len[eocp])
-                    tf -> line[eocp][i++] = '\0';
+                for (ix = i2; ix < tf -> width; ix++)
+                    tf -> line[eocp - 1][ix] = tf -> line[eocp][ix - i2];
+                ix_max = len[eocp] - postrx;
+                for (ix = 0; ix < ix_max; ix++)
+                    tf -> line[eocp][ix] = tf -> line[eocp][postrx + ix];
+                while (ix < len[eocp])
+                    tf -> line[eocp][ix++] = '\0';
                 len[ry] = tf -> width;
                 len[eocp] -= postrx;
             }
-            for (i = ry; i <= eocp; i++) changed[i] = 1;
+            for (iy = ry; iy <= eocp; iy++) changed[iy] = 1;
             break;
         case SPC_ENTER:
             /* determine i2 */
@@ -357,35 +357,38 @@ void ftfield(struct tfield *tf)
             if (i2 & 1) /* 1 or 3 */
                 goto change2;
             if (i2 & 2) { /* 2 or 14 */
-                for (i = rx; i < len[ry]; i++)
-                    tf -> line[ry + 1][i - rx] = tf -> line[ry][i];
+                ix_max = len[ry] - rx;
+                for (ix = 0; ix < ix_max; ix++)
+                    tf -> line[ry + 1][ix] = tf -> line[ry][ix + rx];
                 goto change2;
             }
             
             /* 0 or 8 */
             postrx = tf -> width - rx;
             if (i2) { /* 8 */
-                for (i = rx; i < len[eocp]; i++) {
-                    tf -> line[eocp + 1][i - rx] = tf -> line[eocp][i];
-                    tf -> line[eocp][i] = '\0';
-                }
                 i = eocp;
+                ix_max = len[eocp] - rx;
+                for (ix = 0; ix < ix_max; ix++) {
+                    tf -> line[eocp + 1][ix] = tf -> line[eocp][rx + ix];
+                    tf -> line[eocp][rx + ix] = '\0';
+                }
             } else { /* 0 */
                 i = eocp - 1;
-                for (i3 = len[eocp] + postrx - 1; i3 >= postrx; i3--)
-                    tf -> line[eocp][i3] = tf -> line[eocp][i3 - postrx];
-                for (i3 = rx; i3 < tf -> width; i3++)
-                    tf -> line[eocp][i3 - rx] = tf -> line[i][i3];
+                for (ix = len[eocp] + postrx - 1; ix >= postrx; ix--)
+                    tf -> line[eocp][ix] = tf -> line[eocp][ix - postrx];
+                ix_max = tf -> width - rx;
+                for (ix = 0; ix < ix_max; ix++)
+                    tf -> line[eocp][ix] = tf -> line[i][rx + ix];
             }
             /* shifting within current paragraph */
-            while (i > ry) {
-                for (i3 = tf -> width - 1; i3 >= postrx; i3--)
-                    tf -> line[i][i3] = tf -> line[i][i3 - postrx];
-                for (i3 = rx; i3 < tf -> width; i3++)
-                    tf -> line[i][i3 - rx] = tf -> line[i - 1][i3];
-                i--;
+            for (; i > ry; i--) {
+                for (ix = tf -> width - 1; ix >= postrx; ix--)
+                    tf -> line[i][ix] = tf -> line[i][ix - postrx];
+                ix_max = tf -> width - rx;
+                for (ix = 0; ix < ix_max; ix++)
+                    tf -> line[i][ix] = tf -> line[i - 1][rx + ix];
             }
-            for (i = rx; i < tf -> width; i++) tf -> line[ry][i] = '\0';
+            for (ix = rx; ix < tf -> width; ix++) tf -> line[ry][ix] = '\0';
             if (ry != eocp) {
                 len[eocp] += len[ry] - rx;
                 if (len[eocp] > tf -> width) {
@@ -396,7 +399,7 @@ void ftfield(struct tfield *tf)
             len[ry] = rx;
         change2:
             if (i2) maxy++;
-            for (i = maxy; i >= ry; i--) changed[i] = 1;
+            for (iy = maxy; iy >= ry; iy--) changed[iy] = 1;
             eocp = ++ry;
         case SPC_HOME:
             rx = 0;
@@ -582,7 +585,7 @@ void s_printcis(char_info *str, int len, coord c)
     int i;
     
     scis = malloc(len * sizeof *scis);
-    ssr = s_sr(c.x, c.y, c.x + i - 1, c.y);
+    ssr = s_sr(c.x, c.y, c.x + len - 1, c.y);
     for (i = 0; i < len; i++) scis[i] = s_ci(str[i]);
     
     WriteConsoleOutput(s_h_out, scis, s_c(len, 1), s_c(0, 0), &ssr);
