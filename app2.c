@@ -50,8 +50,8 @@ typedef struct {
 struct tfield {
     short width;
     short lc;
-    char **line;
     coord *linepos;
+    char **line;
 };
 
 struct tfield *tfield(short width, short lc, coord *linepos);
@@ -79,12 +79,17 @@ HANDLE s_h_in, s_h_out;
 int main(int argc, char *argv[])
 {
     struct tfield *tf;
+    coord *linepos;
     int i;
     
     s_prepare();
-    tf = tfield(10, 10, NULL);
-    for (i = 0; i < tf -> lc; i++)
-        tf -> linepos[i] = c(10, i + 10);
+    linepos = malloc(10 * sizeof *linepos);
+    for (i = 0; i < 10; i++)
+        linepos[i] = c(10, i + 10);
+    
+    tf = tfield(10, 10, linepos);
+    free(linepos);
+    
     dtfield(tf);
     ftfield(tf);
     
@@ -96,7 +101,7 @@ struct tfield *tfield(short width, short lc, coord *linepos)
     struct tfield *tf;
     int ix, iy;
     
-    tf = malloc(sizeof *tf);
+    tf            = malloc(sizeof *tf);
     tf -> width   = width;
     tf -> lc      = lc;
     tf -> linepos = malloc(lc * sizeof *tf -> linepos);
@@ -104,6 +109,7 @@ struct tfield *tfield(short width, short lc, coord *linepos)
     
     for (iy = 0; iy < lc; iy++) {
         tf -> line[iy] = malloc((width + 1) * sizeof **tf -> line);
+        
         for (ix = 0; ix < width; ix++) tf -> line[iy][ix] = '\0';
         tf -> line[iy][width] = 0;
     }
@@ -416,6 +422,7 @@ void dltfield(struct tfield *tf, short y)
     
     attribute = malloc(tf -> width * sizeof *attribute);
     carr = malloc(tf -> width * sizeof *carr);
+    
     for (x = 0; x < tf -> width; x++) {
       #ifdef ATTRIBUTE
         attribute[x] = B_WHITE;
@@ -432,6 +439,7 @@ void dltfield(struct tfield *tf, short y)
             carr[x] = tf -> line[y][x];
         }
     }
+    
   #ifdef ATTRIBUTE
     WriteConsoleOutputAttribute(s_h_out, attribute, tf -> width,
                                 s_cfc(tf -> linepos[y]), &buf);
@@ -482,6 +490,7 @@ void shift_up(struct tfield *tf, short top, short bottom, short *len)
     }
     tf -> line[bottom] = linebuf;
     len[bottom] = lenbuf;
+    
     return;
 }
 
@@ -525,6 +534,7 @@ key s_read_key()
      
     while (-1) {
         ReadConsoleInput(s_h_in, &ir, (DWORD) 1, &d);
+        
         if (ir.EventType != KEY_EVENT) continue;
         if (!ir.Event.KeyEvent.bKeyDown) continue;
         switch (ir.Event.KeyEvent.wVirtualKeyCode) {
@@ -533,8 +543,10 @@ key s_read_key()
         case VK_RSHIFT:
             continue;
         }
+        
         k.c = ir.Event.KeyEvent.uChar.AsciiChar;
         d = (DWORD) ir.Event.KeyEvent.wVirtualKeyCode;
+        
         for (i = sizeof corr_arr / sizeof **corr_arr / 2 - 1; i >= 0; i--) {
             if (d == corr_arr[i][0]) {
                 k.spc = corr_arr[i][1];
@@ -548,7 +560,6 @@ key s_read_key()
 
 void s_pstrat(const char *str, coord c)
 {
-    LPCTSTR sstr;
     DWORD d;
     
     WriteConsoleOutputCharacter(s_h_out, str, strlen(str), s_cfc(c), &d);
@@ -558,7 +569,6 @@ void s_pstrat(const char *str, coord c)
 
 void s_pcarrat(const char *str, int len, coord c)
 {
-    LPCTSTR sstr;
     DWORD d;
     
     WriteConsoleOutputCharacter(s_h_out, str, len, s_cfc(c), &d);
@@ -575,6 +585,7 @@ void s_printcis(char_info *str, int len, coord c)
     scis = malloc(len * sizeof *scis);
     ssr = s_sr(c.x, c.y, c.x + i - 1, c.y);
     for (i = 0; i < len; i++) scis[i] = s_ci(str[i]);
+    
     WriteConsoleOutput(s_h_out, scis, s_c(len, 1), s_c(0, 0), &ssr);
     free(scis);
     
