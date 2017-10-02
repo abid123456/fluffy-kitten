@@ -81,18 +81,18 @@ int main(int argc, char *argv[])
     struct tfield *tf;
     coord *linepos;
     int i;
-    
+
     s_prepare();
     linepos = malloc(10 * sizeof *linepos);
     for (i = 0; i < 10; i++)
         linepos[i] = c(10, i + 10);
-    
+
     tf = tfield(10, 10, linepos);
     free(linepos);
-    
+
     dtfield(tf);
     ftfield(tf);
-    
+
     return 0;
 }
 
@@ -100,22 +100,22 @@ struct tfield *tfield(short width, short lc, coord *linepos)
 {
     struct tfield *tf;
     int ix, iy;
-    
+
     tf            = malloc(sizeof *tf);
     tf -> width   = width;
     tf -> lc      = lc;
     tf -> linepos = malloc(lc * sizeof *tf -> linepos);
     tf -> line    = malloc(lc * sizeof *tf -> line);
-    
+
     for (iy = 0; iy < lc; iy++) {
         tf -> line[iy] = malloc((width + 1) * sizeof **tf -> line);
-        
+
         for (ix = 0; ix < width; ix++) tf -> line[iy][ix] = '\0';
         tf -> line[iy][width] = 0;
     }
     if (linepos != NULL)
         for (iy = 0; iy < lc; iy++) tf -> linepos[iy] = linepos[iy];
-    
+
     return tf;
 }
 
@@ -123,23 +123,23 @@ void ftfield(struct tfield *tf)
 {
     short *len;     /* lengths of lines                                */
     char  *changed; /* whether lines have changed and must be rendered */
-    
+
     short  rx, ry;  /* cursor coordinates in tf                 */
     short  eocp;    /* y-coordinate of end of current paragraph */
     short  n;       /* used to determine newline presence       */
     short  maxy;    /* highest used y-coordinate                */
-    
+
     int i, i2, ix, iy, ix_max, postrx;
     key k;
-    
+
     /* init some variables */
     len     = calloc(tf -> lc, sizeof *len);
     changed = calloc(tf -> lc, sizeof *changed);
-    
+
     rx = ry = 0;
     eocp    = 0;
     n       = tf -> width;
-    
+
     /* init len members and maxy */
     for (iy = 0; iy < tf -> lc; iy++) {
         len[iy] = strlen(tf -> line[iy]);
@@ -148,33 +148,26 @@ void ftfield(struct tfield *tf)
             break;
         }
     }
-    
+
     /* main loop */
     while (-1) {
-        /** printf("%02x", k.spc); /**/
         /* adjust eocp */
-        s_pstrat("7", c(0,0));
-        s_mvcur(c(1,0));
-        printf(",eocp==%2d,maxy==%2d", eocp, maxy);
         while (eocp != maxy && !tf -> line[eocp][n]) eocp++;
-        s_pstrat("8", c(0,0));
-        s_mvcur(c(2,1));
-        printf("eocp==%2d,maxy==%2d", eocp, maxy);
         /* update display */
-        s_pstrat("9", c(0,0));
+        s_pstrat("7", c(0,0));
         for (iy = 0; iy < tf -> lc; iy++) {
             if (changed[iy]) {
                 dltfield(tf, iy);
                 changed[iy] = 0;
             }
-            s_pstrat("a", c(0,0));
+            s_pstrat("8", c(0,0));
             s_mvcur(c(tf -> linepos[iy].x + tf -> width, tf -> linepos[iy].y));
             printf("%c%c%c%02x",
                     tf -> line[iy][n] ? 'n' : '_',
                     iy == eocp ? 'e' : '_',
                     iy == maxy ? 'm' : '_',
                     len[iy]);
-            s_pstrat("b", c(0,0));
+            s_pstrat("9", c(0,0));
         }
         s_mvcur(c(tf -> linepos[ry].x + rx, tf -> linepos[ry].y));
         /*s_pstrat(" ", c(0,0));*/
@@ -354,7 +347,7 @@ void ftfield(struct tfield *tf)
                 i = ry + 1;
             else i = ry;
             tf -> line[i][n] = 1;
-            
+
             if (i2 & 1) /* 1 or 3 */
                 goto change2;
             if (i2 & 2) { /* 2 or 14 */
@@ -363,7 +356,7 @@ void ftfield(struct tfield *tf)
                     tf -> line[ry + 1][ix] = tf -> line[ry][ix + rx];
                 goto change2;
             }
-            
+
             /* 0 or 8 */
             postrx = tf -> width - rx;
             if (i2) { /* 8 */
@@ -416,16 +409,16 @@ void ftfield(struct tfield *tf)
 void dltfield(struct tfield *tf, short y)
 {
     DWORD buf;
-    
+
   #ifdef ATTRIBUTE
     WORD *attribute;
   #endif
     char *carr;
     int   x;
-    
+
     attribute = malloc(tf -> width * sizeof *attribute);
     carr = malloc(tf -> width * sizeof *carr);
-    
+
     for (x = 0; x < tf -> width; x++) {
       #ifdef ATTRIBUTE
         attribute[x] = B_WHITE;
@@ -442,22 +435,22 @@ void dltfield(struct tfield *tf, short y)
             carr[x] = tf -> line[y][x];
         }
     }
-    
+
   #ifdef ATTRIBUTE
     WriteConsoleOutputAttribute(s_h_out, attribute, tf -> width,
                                 s_cfc(tf -> linepos[y]), &buf);
   #endif
     s_pcarrat(carr, tf -> width, tf -> linepos[y]);
-    
+
     return;
 }
 
 void dtfield(struct tfield *tf)
 {
     int i;
-    
+
     for (i = 0; i < tf -> lc; i++) dltfield(tf, i);
-    
+
     return;
 }
 
@@ -466,7 +459,7 @@ void shift_down(struct tfield *tf, short top, short bottom, short *len)
     char *linebuf;
     short lenbuf;
     int   i;
-    
+
     linebuf = tf -> line[bottom + 1];
     lenbuf  = len[bottom + 1];
     for (i = bottom + 1; i > top; i--) {
@@ -475,7 +468,7 @@ void shift_down(struct tfield *tf, short top, short bottom, short *len)
     }
     tf -> line[top] = linebuf;
     len[top] = lenbuf;
-    
+
     return;
 }
 
@@ -484,7 +477,7 @@ void shift_up(struct tfield *tf, short top, short bottom, short *len)
     char *linebuf;
     short lenbuf;
     int   i;
-    
+
     linebuf = tf -> line[top - 1];
     lenbuf  = len[top - 1];
     for (i = top - 1; i < bottom; i++) {
@@ -493,17 +486,17 @@ void shift_up(struct tfield *tf, short top, short bottom, short *len)
     }
     tf -> line[bottom] = linebuf;
     len[bottom] = lenbuf;
-    
+
     return;
 }
 
 coord c(short x, short y)
 {
     coord c;
-    
+
     c.x = x;
     c.y = y;
-    
+
     return c;
 }
 
@@ -511,7 +504,7 @@ void s_prepare()
 {
     s_h_in  = GetStdHandle(STD_INPUT_HANDLE);
     s_h_out = GetStdHandle(STD_OUTPUT_HANDLE);
-    
+
     return;
 }
 
@@ -534,10 +527,10 @@ key s_read_key()
     DWORD d;
     key   k;
     int   i;
-     
+
     while (-1) {
         ReadConsoleInput(s_h_in, &ir, (DWORD) 1, &d);
-        
+
         if (ir.EventType != KEY_EVENT) continue;
         if (!ir.Event.KeyEvent.bKeyDown) continue;
         switch (ir.Event.KeyEvent.wVirtualKeyCode) {
@@ -546,10 +539,10 @@ key s_read_key()
         case VK_RSHIFT:
             continue;
         }
-        
+
         k.c = ir.Event.KeyEvent.uChar.AsciiChar;
         d = (DWORD) ir.Event.KeyEvent.wVirtualKeyCode;
-        
+
         for (i = sizeof corr_arr / sizeof **corr_arr / 2 - 1; i >= 0; i--) {
             if (d == corr_arr[i][0]) {
                 k.spc = corr_arr[i][1];
@@ -564,18 +557,18 @@ key s_read_key()
 void s_pstrat(const char *str, coord c)
 {
     DWORD d;
-    
+
     WriteConsoleOutputCharacter(s_h_out, str, strlen(str), s_cfc(c), &d);
-    
+
     return;
 }
 
 void s_pcarrat(const char *str, int len, coord c)
 {
     DWORD d;
-    
+
     WriteConsoleOutputCharacter(s_h_out, str, len, s_cfc(c), &d);
-    
+
     return;
 }
 
@@ -584,62 +577,62 @@ void s_printcis(char_info *str, int len, coord c)
     CHAR_INFO *scis;
     SMALL_RECT ssr;
     int i;
-    
+
     scis = malloc(len * sizeof *scis);
     ssr = s_sr(c.x, c.y, c.x + len - 1, c.y);
     for (i = 0; i < len; i++) scis[i] = s_ci(str[i]);
-    
+
     WriteConsoleOutput(s_h_out, scis, s_c(len, 1), s_c(0, 0), &ssr);
     free(scis);
-    
+
     return;
 }
 
 void s_mvcur(coord c)
 {
     SetConsoleCursorPosition(s_h_out, s_cfc(c));
-    
+
     return;
 }
 
 CHAR_INFO s_ci(char_info ci)
 {
     CHAR_INFO sci;
-    
+
     sci.Char.AsciiChar = ci.c;
     sci.Attributes = ci.a;
-    
+
     return sci;
 }
 
 SMALL_RECT s_sr(short left, short top, short right, short bottom)
 {
     SMALL_RECT sr;
-    
+
     sr.Left   = left;
     sr.Top    = top;
     sr.Right  = right;
     sr.Bottom = bottom;
-    
+
     return sr;
 }
 
 COORD s_c(short x, short y)
 {
     COORD c;
-    
+
     c.X = x;
     c.Y = y;
-    
+
     return c;
 }
 
 COORD s_cfc(coord c)
 {
     COORD sc;
-    
+
     sc.X = c.x;
     sc.Y = c.y;
-    
+
     return sc;
 }
