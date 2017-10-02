@@ -135,6 +135,7 @@ void ftfield(struct tfield *tf)
     /* init some variables */
     len     = calloc(tf -> lc, sizeof *len);
     changed = calloc(tf -> lc, sizeof *changed);
+    
     rx = ry = 0;
     eocp    = 0;
     n       = tf -> width;
