@@ -83,11 +83,11 @@ int main(int argc, char *argv[])
     int i;
 
     s_prepare();
-    linepos = malloc(10 * sizeof *linepos);
-    for (i = 0; i < 10; i++)
-        linepos[i] = c(10, i + 10);
+    linepos = malloc(20 * sizeof *linepos);
+    for (i = 0; i < 20; i++)
+        linepos[i] = c(20, i + 20);
 
-    tf = tfield(10, 10, linepos);
+    tf = tfield(20, 20, linepos);
     free(linepos);
 
     dtfield(tf);
