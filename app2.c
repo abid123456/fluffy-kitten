@@ -489,27 +489,27 @@ void add_newline(struct tfield *tf, struct tf_handle *h)
             case_n = 8; /* too long to fit without a new line */
         else if (h -> r.y == h -> eocp) case_n = (h -> r.y == h -> maxy) ?
         2:    /* cursor at last line */
-        14;   /* cursor in a line with a newline */
+        6;   /* cursor in a line with a newline */
         else case_n = 0;
     }
     if (h -> maxy == tf -> lc - 1) return;
     
     /* using case_n */
-    if (case_n && case_n != 2) { /* 1, 3, 14, or 8 */
+    if (case_n && case_n != 2) { /* 1, 3, 6, or 8 */
         if (case_n & 1) /* 1 or 3 */
             shift_top = h -> r.y;
-        else /* 14 or 8 */
+        else /* 6 or 8 */
             shift_top = h -> eocp + 1;
         shift_down(tf, shift_top, h -> maxy, h -> len);
     }
-    if (case_n == 14 || (case_n == 8 && h -> r.y == h -> eocp && h -> r.y != h -> maxy))
+    if (case_n == 6 || (case_n == 8 && h -> r.y == h -> eocp && h -> r.y != h -> maxy))
         iy = h -> r.y + 1;
     else iy = h -> r.y;
     tf -> line[iy][n] = 1;
     
     if (case_n & 1) /* 1 or 3 */
         goto change2;
-    if (case_n & 2) { /* 2 or 14 */
+    if (case_n & 2) { /* 2 or 6 */
         for (ix = h -> r.x; ix < h -> len[h -> r.y]; ix++)
             tf -> line[h -> r.y + 1][ix - h -> r.x] = tf -> line[h -> r.y][ix];
         goto change2;
