@@ -347,7 +347,8 @@ void ftfield(struct tfield *tf)
             if (h.r.y != h.eocp) {
                 for (i = h.len[h.eocp]; i; i--)
                     tf -> line[h.eocp][i] = tf -> line[h.eocp][i - 1];
-                tf -> line[h.eocp][0] = tf -> line[h.eocp - 1][tf -> width - 1];
+                tf -> line[h.eocp][0]
+                = tf -> line[h.eocp - 1][tf -> width - 1];
                 for (i2 = h.eocp - 1; i2 > h.r.y; i2--) {
                     for (i = tf -> width - 1; i; i--)
                         tf -> line[i2][i] = tf -> line[i2][i - 1];
@@ -395,7 +396,8 @@ void ftfield(struct tfield *tf)
         case SPC_END:
             h.r.x = h.len[h.r.y];
         adjust_rx:
-            if (h.r.x == tf -> width && !tf -> line[h.r.y][n] && h.r.y != h.maxy) h.r.x--;
+            if (h.r.x == tf -> width &&
+                !(tf -> line[h.r.y][n] || h.r.y == h.maxy)) h.r.x--;
         check_key:
             if (k.spc != SPC_BACK) break;
         case SPC_DEL:
@@ -485,7 +487,7 @@ void add_newline(struct tfield *tf, struct tf_handle *h)
             return;
         }
     } else {
-        if (h -> len[h -> eocp] > h -> r.x)
+        if (h -> r.x < h -> len[h -> eocp])
             case_n = 8; /* too long to fit without a new line */
         else if (h -> r.y == h -> eocp) case_n = (h -> r.y == h -> maxy) ?
         2:    /* cursor at last line */
@@ -502,33 +504,37 @@ void add_newline(struct tfield *tf, struct tf_handle *h)
             shift_top = h -> eocp + 1;
         shift_down(tf, shift_top, h -> maxy, h -> len);
     }
-    if (case_n == 6 || (case_n == 8 && h -> r.y == h -> eocp && h -> r.y != h -> maxy))
-        iy = h -> r.y + 1;
-    else iy = h -> r.y;
-    tf -> line[iy][n] = 1;
+    if (case_n == 6 ||
+        (case_n == 8 && h -> r.y == h -> eocp && h -> r.y != h -> maxy))
+        tf -> line[h -> r.y + 1][n] = 1;
+    else tf -> line[h -> r.y][n] = 1;
     
     if (case_n & 1) /* 1 or 3 */
-        goto change2;
+        goto an_change_h;
     if (case_n & 2) { /* 2 or 6 */
-        for (ix = h -> r.x; ix < h -> len[h -> r.y]; ix++)
-            tf -> line[h -> r.y + 1][ix - h -> r.x] = tf -> line[h -> r.y][ix];
-        goto change2;
+        for (ix = h -> r.x; ix < h -> len[h -> r.y]; ix++) {
+            tf -> line[h -> r.y + 1][ix - h -> r.x]
+            = tf -> line[h -> r.y][ix];
+        }
+        goto an_change_h;
     }
     
     /* 0 or 8 */
     postrx = tf -> width - h -> r.x;
     if (case_n) { /* 8 */
         for (ix = h -> r.x; ix < h -> len[h -> eocp]; ix++) {
-            tf -> line[h -> eocp + 1][ix - h -> r.x] = tf -> line[h -> eocp][ix];
+            tf -> line[h -> eocp + 1][ix - h -> r.x]
+            = tf -> line[h -> eocp][ix];
             tf -> line[h -> eocp][ix] = '\0';
         }
         iy = h -> eocp;
     } else { /* 0 */
-        iy = h -> eocp - 1;
         for (ix = h -> len[h -> eocp] + postrx - 1; ix >= postrx; ix--)
             tf -> line[h -> eocp][ix] = tf -> line[h -> eocp][ix - postrx];
         for (ix = h -> r.x; ix < tf -> width; ix++)
-            tf -> line[h -> eocp][ix - h -> r.x] = tf -> line[iy][ix];
+            tf -> line[h -> eocp][ix - h -> r.x]
+        = tf -> line[h -> eocp - 1][ix];
+        iy = h -> eocp - 1;
     }
     /* shifting within current paragraph */
     while (iy > h -> r.y) {
@@ -538,7 +544,8 @@ void add_newline(struct tfield *tf, struct tf_handle *h)
             tf -> line[iy][ix - h -> r.x] = tf -> line[iy - 1][ix];
         iy--;
     }
-    for (ix = h -> r.x; ix < tf -> width; ix++) tf -> line[h -> r.y][ix] = '\0';
+    for (ix = h -> r.x; ix < tf -> width; ix++)
+        tf -> line[h -> r.y][ix] = '\0';
     if (h -> r.y != h -> eocp) {
         h -> len[h -> eocp] += h -> len[h -> r.y] - h -> r.x;
         if (h -> len[h -> eocp] > tf -> width) {
@@ -547,7 +554,7 @@ void add_newline(struct tfield *tf, struct tf_handle *h)
         }
     } else h -> len[h -> r.y + 1] += h -> len[h -> r.y] - h -> r.x;
     h -> len[h -> r.y] = h -> r.x;
-  change2:
+  an_change_h:
     if (case_n) h -> maxy++;
     for (iy = h -> maxy; iy >= h -> r.y; iy--) h -> changed[iy] = 1;
     h -> eocp = ++h -> r.y;
