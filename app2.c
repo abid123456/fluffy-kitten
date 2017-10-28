@@ -89,6 +89,7 @@ void dltfield(struct tfield *tf, short y);
 void dtfield(struct tfield *tf);
 
 void ftfield(struct tfield *tf);
+void delete(struct tfield *tf, struct tf_handle *h);
 void add_newline(struct tfield *tf, struct tf_handle *h);
 void shift_down(struct tfield *tf, short top, short bottom, short *len);
 void shift_up(struct tfield *tf, short top, short bottom, short *len);
@@ -347,7 +348,8 @@ void ftfield(struct tfield *tf)
             if (h.r.y != h.eocp) {
                 for (i = h.len[h.eocp]; i; i--)
                     tf -> line[h.eocp][i] = tf -> line[h.eocp][i - 1];
-                tf -> line[h.eocp][0] = tf -> line[h.eocp - 1][tf -> width - 1];
+                tf -> line[h.eocp][0]
+                = tf -> line[h.eocp - 1][tf -> width - 1];
                 for (i2 = h.eocp - 1; i2 > h.r.y; i2--) {
                     for (i = tf -> width - 1; i; i--)
                         tf -> line[i2][i] = tf -> line[i2][i - 1];
@@ -395,65 +397,12 @@ void ftfield(struct tfield *tf)
         case SPC_END:
             h.r.x = h.len[h.r.y];
         adjust_rx:
-            if (h.r.x == tf -> width && !tf -> line[h.r.y][n] && h.r.y != h.maxy) h.r.x--;
+            if (h.r.x == tf -> width &&
+                !(tf -> line[h.r.y][n] || h.r.y == h.maxy)) h.r.x--;
         check_key:
             if (k.spc != SPC_BACK) break;
         case SPC_DEL:
-            if (h.r.y == h.maxy && h.r.x == h.len[h.r.y]) break;
-            if (!tf -> line[h.r.y][n] || h.r.x != h.len[h.r.y]) {
-                /* deleting a character */
-                i2 = h.len[h.r.y] - 1;
-                for (i = h.r.x;  i < i2; i++)
-                    tf -> line[h.r.y][i] = tf -> line[h.r.y][i + 1];
-                if (h.r.y == h.eocp) {
-                    tf -> line[h.r.y][--h.len[h.r.y]] = '\0';
-                    h.changed[h.r.y] = 1;
-                    break;
-                }
-                h.len[h.r.y]--;
-                i3 = tf -> width - 1;
-                postrx = 1;
-            } else { /* deleting a \n */
-                tf -> line[h.r.y][n] = 0;
-                i3 = h.r.x;
-                postrx = tf -> width - h.r.x;
-                while (h.eocp < h.maxy && !tf -> line[h.eocp][n]) h.eocp++;
-            }
-            /* shifting */
-            for (i2 = h.r.y + 1; i2 < h.eocp; i2++) {
-                for (i = i3; i < tf -> width; i++)
-                    tf -> line[i2 - 1][i] = tf -> line[i2][i - i3];
-                for (i = 0; i < i3; i++)
-                    tf -> line[i2][i] = tf -> line[i2][postrx + i];
-            }
-            if (h.len[h.eocp] <= postrx) { /* shift up */
-                i2 = i3 + h.len[h.eocp--];
-                for (i = i3; i < i2; i++) {
-                    tf -> line[h.eocp][i] = tf -> line[h.eocp + 1][i - i3];
-                    tf -> line[h.eocp + 1][i - i3] = '\0';
-                }
-                while (i < tf -> width)
-                    tf -> line[h.eocp][i++] = '\0';
-                h.len[h.eocp] = h.len[h.r.y] + h.len[h.eocp + 1];
-                if (h.eocp != h.r.y) h.len[h.r.y] = tf -> width;
-                h.len[h.eocp + 1] = 0;
-                if (tf -> line[h.eocp + 1][n]) {
-                    tf -> line[h.eocp + 1][n] = 0;
-                    tf -> line[h.eocp][n] = 1;
-                }
-                shift_up(tf, h.eocp + 2, h.maxy--, h.len);
-            } else { /* no shift up */
-                for (i = i3; i < tf -> width; i++)
-                    tf -> line[h.eocp - 1][i] = tf -> line[h.eocp][i - i3];
-                i2 = h.len[h.eocp] - postrx;
-                for (i = 0; i < i2; i++)
-                    tf -> line[h.eocp][i] = tf -> line[h.eocp][postrx + i];
-                while (i < h.len[h.eocp])
-                    tf -> line[h.eocp][i++] = '\0';
-                h.len[h.r.y] = tf -> width;
-                h.len[h.eocp] -= postrx;
-            }
-            for (i = h.r.y; i <= h.eocp; i++) h.changed[i] = 1;
+            delete(tf, &h);
             break;
         case SPC_ENTER:
             add_newline(tf, &h);
@@ -470,6 +419,70 @@ void ftfield(struct tfield *tf)
 
 /* ------------------------ ftfield subfunctions ------------------------- */
 
+void delete(struct tfield *tf, struct tf_handle *h)
+{
+    int i, i2, i3;
+    short postrx;
+    
+    if (h -> r.y == h -> maxy && h -> r.x == h -> len[h -> r.y]) return;
+    if (!tf -> line[h -> r.y][n] || h -> r.x != h -> len[h -> r.y]) {
+        /* deleting a character */
+        i2 = h -> len[h -> r.y] - 1;
+        for (i = h -> r.x;  i < i2; i++)
+            tf -> line[h -> r.y][i] = tf -> line[h -> r.y][i + 1];
+        if (h -> r.y == h -> eocp) {
+            tf -> line[h -> r.y][--h -> len[h -> r.y]] = '\0';
+            h -> changed[h -> r.y] = 1;
+            return;
+        }
+        h -> len[h -> r.y]--;
+        i3 = tf -> width - 1;
+        postrx = 1;
+    } else { /* deleting a \n */
+        tf -> line[h -> r.y][n] = 0;
+        i3 = h -> r.x;
+        postrx = tf -> width - h -> r.x;
+        while (h -> eocp < h -> maxy && !tf -> line[h -> eocp][n])
+            h -> eocp++;
+    }
+    /* shifting */
+    for (i2 = h -> r.y + 1; i2 < h -> eocp; i2++) {
+        for (i = i3; i < tf -> width; i++)
+            tf -> line[i2 - 1][i] = tf -> line[i2][i - i3];
+        for (i = 0; i < i3; i++)
+            tf -> line[i2][i] = tf -> line[i2][postrx + i];
+    }
+    if (h -> len[h -> eocp] <= postrx) { /* shift up */
+        i2 = i3 + h -> len[h -> eocp--];
+        for (i = i3; i < i2; i++) {
+            tf -> line[h -> eocp][i] = tf -> line[h -> eocp + 1][i - i3];
+            tf -> line[h -> eocp + 1][i - i3] = '\0';
+        }
+        while (i < tf -> width)
+            tf -> line[h -> eocp][i++] = '\0';
+        h -> len[h -> eocp] = h -> len[h -> r.y] + h -> len[h -> eocp + 1];
+        if (h -> eocp != h -> r.y) h -> len[h -> r.y] = tf -> width;
+        h -> len[h -> eocp + 1] = 0;
+        if (tf -> line[h -> eocp + 1][n]) {
+            tf -> line[h -> eocp + 1][n] = 0;
+            tf -> line[h -> eocp][n] = 1;
+        }
+        shift_up(tf, h -> eocp + 2, h -> maxy--, h -> len);
+    } else { /* no shift up */
+        for (i = i3; i < tf -> width; i++)
+            tf -> line[h -> eocp - 1][i] = tf -> line[h -> eocp][i - i3];
+        i2 = h -> len[h -> eocp] - postrx;
+        for (i = 0; i < i2; i++)
+            tf -> line[h -> eocp][i] = tf -> line[h -> eocp][postrx + i];
+        while (i < h -> len[h -> eocp])
+            tf -> line[h -> eocp][i++] = '\0';
+        h -> len[h -> r.y] = tf -> width;
+        h -> len[h -> eocp] -= postrx;
+    }
+    for (i = h -> r.y; i <= h -> eocp; i++) h -> changed[i] = 1;
+    return;
+}
+
 void add_newline(struct tfield *tf, struct tf_handle *h)
 {
     int case_n;
@@ -485,50 +498,54 @@ void add_newline(struct tfield *tf, struct tf_handle *h)
             return;
         }
     } else {
-        if (h -> len[h -> eocp] > h -> r.x)
+        if (h -> r.x < h -> len[h -> eocp])
             case_n = 8; /* too long to fit without a new line */
         else if (h -> r.y == h -> eocp) case_n = (h -> r.y == h -> maxy) ?
         2:    /* cursor at last line */
-        14;   /* cursor in a line with a newline */
+        6;   /* cursor in a line with a newline */
         else case_n = 0;
     }
     if (h -> maxy == tf -> lc - 1) return;
     
     /* using case_n */
-    if (case_n && case_n != 2) { /* 1, 3, 14, or 8 */
+    if (case_n && case_n != 2) { /* 1, 3, 6, or 8 */
         if (case_n & 1) /* 1 or 3 */
             shift_top = h -> r.y;
-        else /* 14 or 8 */
+        else /* 6 or 8 */
             shift_top = h -> eocp + 1;
         shift_down(tf, shift_top, h -> maxy, h -> len);
     }
-    if (case_n == 14 || (case_n == 8 && h -> r.y == h -> eocp && h -> r.y != h -> maxy))
-        iy = h -> r.y + 1;
-    else iy = h -> r.y;
-    tf -> line[iy][n] = 1;
+    if (case_n == 6 ||
+        (case_n == 8 && h -> r.y == h -> eocp && h -> r.y != h -> maxy))
+        tf -> line[h -> r.y + 1][n] = 1;
+    else tf -> line[h -> r.y][n] = 1;
     
     if (case_n & 1) /* 1 or 3 */
-        goto change2;
-    if (case_n & 2) { /* 2 or 14 */
-        for (ix = h -> r.x; ix < h -> len[h -> r.y]; ix++)
-            tf -> line[h -> r.y + 1][ix - h -> r.x] = tf -> line[h -> r.y][ix];
-        goto change2;
+        goto an_change_h;
+    if (case_n & 2) { /* 2 or 6 */
+        for (ix = h -> r.x; ix < h -> len[h -> r.y]; ix++) {
+            tf -> line[h -> r.y + 1][ix - h -> r.x]
+            = tf -> line[h -> r.y][ix];
+        }
+        goto an_change_h;
     }
     
     /* 0 or 8 */
     postrx = tf -> width - h -> r.x;
     if (case_n) { /* 8 */
         for (ix = h -> r.x; ix < h -> len[h -> eocp]; ix++) {
-            tf -> line[h -> eocp + 1][ix - h -> r.x] = tf -> line[h -> eocp][ix];
+            tf -> line[h -> eocp + 1][ix - h -> r.x]
+            = tf -> line[h -> eocp][ix];
             tf -> line[h -> eocp][ix] = '\0';
         }
         iy = h -> eocp;
     } else { /* 0 */
-        iy = h -> eocp - 1;
         for (ix = h -> len[h -> eocp] + postrx - 1; ix >= postrx; ix--)
             tf -> line[h -> eocp][ix] = tf -> line[h -> eocp][ix - postrx];
         for (ix = h -> r.x; ix < tf -> width; ix++)
-            tf -> line[h -> eocp][ix - h -> r.x] = tf -> line[iy][ix];
+            tf -> line[h -> eocp][ix - h -> r.x]
+        = tf -> line[h -> eocp - 1][ix];
+        iy = h -> eocp - 1;
     }
     /* shifting within current paragraph */
     while (iy > h -> r.y) {
@@ -538,7 +555,8 @@ void add_newline(struct tfield *tf, struct tf_handle *h)
             tf -> line[iy][ix - h -> r.x] = tf -> line[iy - 1][ix];
         iy--;
     }
-    for (ix = h -> r.x; ix < tf -> width; ix++) tf -> line[h -> r.y][ix] = '\0';
+    for (ix = h -> r.x; ix < tf -> width; ix++)
+        tf -> line[h -> r.y][ix] = '\0';
     if (h -> r.y != h -> eocp) {
         h -> len[h -> eocp] += h -> len[h -> r.y] - h -> r.x;
         if (h -> len[h -> eocp] > tf -> width) {
@@ -547,7 +565,7 @@ void add_newline(struct tfield *tf, struct tf_handle *h)
         }
     } else h -> len[h -> r.y + 1] += h -> len[h -> r.y] - h -> r.x;
     h -> len[h -> r.y] = h -> r.x;
-  change2:
+  an_change_h:
     if (case_n) h -> maxy++;
     for (iy = h -> maxy; iy >= h -> r.y; iy--) h -> changed[iy] = 1;
     h -> eocp = ++h -> r.y;
