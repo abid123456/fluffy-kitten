@@ -21,9 +21,6 @@
 #define SPC_VERTICAL    0x10
 #define SPC_RIGHT_OR_NS 0x20
 
-#define F_GREY          F_BLUE | F_GREEN | F_RED
-#define B_WHITE         B_BLUE | B_GREEN | B_RED | B_INTENSITY
-
 #define F_BLUE          FOREGROUND_BLUE
 #define F_GREEN         FOREGROUND_GREEN
 #define F_RED           FOREGROUND_RED
@@ -33,6 +30,14 @@
 #define B_GREEN         BACKGROUND_GREEN
 #define B_RED           BACKGROUND_RED
 #define B_INTENSITY     BACKGROUND_INTENSITY
+
+#define F_GREY          F_BLUE | F_GREEN | F_RED
+#define B_WHITE         B_BLUE | B_GREEN | B_RED | B_INTENSITY
+#define F_WHITE         F_BLUE | F_GREEN | F_RED | F_INTENSITY
+#define B_DARK_GREY     B_INTENSITY
+
+#define SCR_W           80
+#define SCR_H           25
 
 /* ------------------------- struct definitions -------------------------- */
 
@@ -120,8 +125,8 @@ int main(int argc, char *argv[])
     int i;
     short width, lc;
     
-    width = 50;
-    lc = 20;
+    width = 35;
+    lc = 36;
     if (argc > 1) {
         tf = read_from_file(argv[1], width, lc, NULL);
         /* if (argc != 3) {
@@ -136,8 +141,11 @@ int main(int argc, char *argv[])
         y = 10; */
     }
     s_prepare();
-    for (i = 0; i < tf -> lc; i++)
-        tf -> linepos[i] = c(4, i + 4);
+    for (i = 0; i < tf -> lc / 2; i++) {
+        tf -> linepos[i] = c(4, i + 3);
+        tf -> linepos[i + tf -> lc / 2] = c(40, i + 3);
+    }
+    
     dtfield(tf);
     ftfield(tf);
     write_to_file(argv[1], tf);
@@ -297,37 +305,22 @@ void ftfield(struct tfield *tf)
     
     /* main loop */
     while (-1) {
-        /** printf("%02x", k.spc); /**/
         /* adjust eocp */
-        s_pstrat("7", c(0,0));
-        s_mvcur(c(1,0));
-        printf(",eocp==%2d,maxy==%2d", h.eocp, h.maxy);
-        while (h.eocp != h.maxy && !tf -> line[h.eocp][n])
-            h.eocp++;
-        s_pstrat("8", c(0,0));
-        s_mvcur(c(2,1));
-        printf("eocp==%2d,maxy==%2d", h.eocp, h.maxy);
+        while (h.eocp != h.maxy && !tf -> line[h.eocp][n]) h.eocp++;
+        
         /* update display */
-        s_pstrat("9", c(0,0));
         for (i = 0; i < tf -> lc; i++) {
             /** if (h.changed[i]) { /**/
                 dltfield(tf, i);
                 h.changed[i] = 0;
-            /** } /**/
-            s_pstrat("a", c(0,0));
-            s_mvcur(c(tf -> linepos[i].x + tf -> width, tf -> linepos[i].y));
-            printf("%c%c%c%02x",
-                    tf -> line[i][n] ? 'n' : '_',
-                    i == h.eocp ? 'e' : '_',
-                    i == h.maxy ? 'm' : '_',
-                    h.len[i]);
-            s_pstrat("b", c(0,0));
+            /** } /**
+            printf("%c%c%c%02x", tf -> line[i][n] ? 'n' : '_', i == h.eocp
+                    ? 'e' : '_', i == h.maxy ? 'm' : '_', h.len[i]); /**/
         }
         s_mvcur(c(tf -> linepos[h.r.y].x + h.r.x, tf -> linepos[h.r.y].y));
-        s_pstrat(" ", c(0,0));
+        
+        /* input and main switch */
         k = s_read_key();
-        s_pstrat("1", c(0,0));
-        /* main switch */
         switch (k.spc) {
         case NOTHING_SPECIAL:
             /* insert line if needed */
@@ -369,16 +362,11 @@ void ftfield(struct tfield *tf)
                 h.r.x++;
                 break;
             }
-            s_pstrat("2", c(0,0));
         case SPC_DOWN:
             if (h.r.y == h.maxy) break;
-            s_pstrat("3", c(0,0));
             if (tf -> line[h.r.y++][n]) h.eocp++;
-            s_pstrat("4", c(0,0));
             if (k.spc & SPC_RIGHT_OR_NS) {
-                s_pstrat("5", c(0,0));
                 h.r.x = 0;
-                s_pstrat("6", c(0,0));
                 break;
             }
             goto check_x_coord;
@@ -616,8 +604,43 @@ void shift_up(struct tfield *tf, short top, short bottom, short *len)
 
 void s_prepare()
 {
+    CHAR_INFO *sci;
+    SMALL_RECT ssr;
+    int i;
+    
     s_h_in  = GetStdHandle(STD_INPUT_HANDLE);
     s_h_out = GetStdHandle(STD_OUTPUT_HANDLE);
+    
+    sci = malloc(SCR_W * SCR_H * sizeof *sci);
+    for (i = 0; i < SCR_W * SCR_H; i++) {
+        sci[i].Char.AsciiChar = '\0';
+        sci[i].Attributes = B_DARK_GREY | F_BLACK;
+    }
+    ssr = s_sr(0, 0, SCR_W - 1, SCR_H - 1);
+    WriteConsoleOutput(s_h_out, sci, s_c(SCR_W, SCR_H), s_c(0, 0), &ssr);
+    
+    for (i = 0; i < 1500; i++) {
+        sci[i].Char.AsciiChar = 177;
+        sci[i].Attributes = B_DARK_GREY | F_BLACK;
+    }
+    ssr = s_sr(5, 4, 75, 22);
+    WriteConsoleOutput(s_h_out, sci, s_c(71, 19), s_c(0, 0), &ssr);
+    
+    for (i = 0; i < 100; i++) {
+        sci[i].Char.AsciiChar = '\0';
+        sci[i].Attributes = B_WHITE | F_WHITE;
+    }
+    ssr = s_sr(4, 21, 38, 21);
+    WriteConsoleOutput(s_h_out, sci, s_c(35, 1), s_c(0, 0), &ssr);
+    ssr = s_sr(40, 21, 74, 21);
+    WriteConsoleOutput(s_h_out, sci, s_c(35, 1), s_c(0, 0), &ssr);
+    
+    for (i = 0; i < 50; i++) {
+        sci[i].Char.AsciiChar = 232;
+        sci[i].Attributes = B_WHITE | F_BLACK;
+    }
+    ssr = s_sr(39, 3, 39, 21);
+    WriteConsoleOutput(s_h_out, sci, s_c(1, 19), s_c(0, 0), &ssr);
     
     return;
 }
