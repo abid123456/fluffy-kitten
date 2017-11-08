@@ -693,7 +693,6 @@ void s_pstrat(const char *str, coord c)
     DWORD d;
     
     WriteConsoleOutputCharacter(s_h_out, str, strlen(str), s_cfc(c), &d);
-    
     return;
 }
 
