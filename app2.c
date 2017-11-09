@@ -17,6 +17,8 @@
 #define SPC_HOME        0x07
 #define SPC_ESC         0x08
 #define SPC_CTRL        0x09
+#define SPC_PRESSED     0x40
+#define CTRL            0x01
 
 #define SPC_VERTICAL    0x10
 #define SPC_RIGHT_OR_NS 0x20
@@ -114,6 +116,10 @@ COORD s_cfc(coord c);
 
 HANDLE s_h_in, s_h_out;
 short n; /* used to determine newline presence */
+char *current_fname;
+int saved;
+char str_saved[2] = {228, '\0'};
+char str_unsaved[2] = {229, '\0'};
 
 /* ----------------------------------------------------------------------- */
 /* ------------------------ function definitions ------------------------- */
@@ -128,7 +134,9 @@ int main(int argc, char *argv[])
     width = 35;
     lc = 36;
     if (argc > 1) {
+        current_fname = argv[1];
         tf = read_from_file(argv[1], width, lc, NULL);
+        saved = 1;
         /* if (argc != 3) {
             printf("Error %d: Invalid number of arguments\n", 1);
             return 1;
@@ -137,6 +145,7 @@ int main(int argc, char *argv[])
         y = (int) strtol(argv[2], NULL, 10); */
     } else {
         tf = tfield(width, lc, NULL);
+        saved = -1;
         /* x = 10;
         y = 10; */
     }
@@ -145,10 +154,9 @@ int main(int argc, char *argv[])
         tf -> linepos[i] = c(4, i + 3);
         tf -> linepos[i + tf -> lc / 2] = c(40, i + 3);
     }
-    
     dtfield(tf);
     ftfield(tf);
-    write_to_file(argv[1], tf);
+    /* write_to_file(current_fname, tf); */
     
     return 0;
 }
@@ -318,11 +326,24 @@ void ftfield(struct tfield *tf)
                     ? 'e' : '_', i == h.maxy ? 'm' : '_', h.len[i]); /**/
         }
         s_mvcur(c(tf -> linepos[h.r.y].x + h.r.x, tf -> linepos[h.r.y].y));
+        if (!saved) {
+            s_pstrat(str_unsaved, c(4, 2));
+        } else {
+            s_pstrat(str_saved, c(4, 2));
+        }
         
         /* input and main switch */
         k = s_read_key();
         switch (k.spc) {
-        case NOTHING_SPECIAL:
+          case NOTHING_SPECIAL:
+            /* handle save command */
+            if (k.c == 19) {
+                if (saved != -1) {
+                    write_to_file(current_fname, tf);
+                    saved = 1;
+                }
+                break;
+            }
             /* insert line if needed */
             if (h.len[h.eocp] == tf -> width) {
                 if (h.maxy == tf -> lc - 1) break;
@@ -356,13 +377,14 @@ void ftfield(struct tfield *tf)
             tf -> line[h.r.y][h.r.x] = k.c;
             h.len[h.eocp]++;
             for (i = h.r.y; i <= h.eocp; i++) h.changed[i] = 1;
-        case SPC_RIGHT:
+            if (saved != -1) saved = 0;
+          case SPC_RIGHT:
             if (h.r.x < h.len[h.r.y] &&
                 (h.r.y == h.eocp || h.r.x < tf -> width - 1)) {
                 h.r.x++;
                 break;
             }
-        case SPC_DOWN:
+          case SPC_DOWN:
             if (h.r.y == h.maxy) break;
             if (tf -> line[h.r.y++][n]) h.eocp++;
             if (k.spc & SPC_RIGHT_OR_NS) {
@@ -370,35 +392,37 @@ void ftfield(struct tfield *tf)
                 break;
             }
             goto check_x_coord;
-        case SPC_LEFT:
-        case SPC_BACK:
+          case SPC_LEFT:
+          case SPC_BACK:
             if (h.r.x) {
                 h.r.x--;
                 goto check_key;
             }
-        case SPC_UP:
+          case SPC_UP:
             if (!h.r.y) break;
             if (tf -> line[--h.r.y][n]) h.eocp = h.r.y;
-        check_x_coord:
+           check_x_coord:
             if ((k.spc & SPC_VERTICAL) && h.r.x <= h.len[h.r.y])
                 goto adjust_rx;
-        case SPC_END:
+          case SPC_END:
             h.r.x = h.len[h.r.y];
-        adjust_rx:
+           adjust_rx:
             if (h.r.x == tf -> width &&
                 !(tf -> line[h.r.y][n] || h.r.y == h.maxy)) h.r.x--;
-        check_key:
+           check_key:
             if (k.spc != SPC_BACK) break;
-        case SPC_DEL:
+          case SPC_DEL:
             delete(tf, &h);
+            if (saved != -1) saved = 0;
             break;
-        case SPC_ENTER:
+          case SPC_ENTER:
             add_newline(tf, &h);
+            if (saved != -1) saved = 0;
             break;
-        case SPC_HOME:
+          case SPC_HOME:
             h.r.x = 0;
             break;
-        case SPC_ESC:
+          case SPC_ESC:
             return;
         }
     }
@@ -567,18 +591,14 @@ void shift_down(struct tfield *tf, short top, short bottom, short *len)
     short lenbuf;
     int   i;
     
-    s_pstrat("1", c(1, 0));
     linebuf = tf -> line[++bottom];
     lenbuf  = len[bottom];
-    s_pstrat("2", c(1, 0));
     for (i = bottom; i > top; i--) {
         tf -> line[i] = tf -> line[i - 1];
         len[i] = len[i - 1];
     }
-    s_pstrat("3", c(1, 0));
     tf -> line[top] = linebuf;
     len[top] = lenbuf;
-    s_pstrat(" ", c(1, 0));
     
     return;
 }
@@ -610,6 +630,7 @@ void s_prepare()
     
     s_h_in  = GetStdHandle(STD_INPUT_HANDLE);
     s_h_out = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleMode(s_h_in, ENABLE_MOUSE_INPUT | ENABLE_WINDOW_INPUT);
     
     sci = malloc(SCR_W * SCR_H * sizeof *sci);
     for (i = 0; i < SCR_W * SCR_H; i++) {
@@ -670,9 +691,9 @@ key s_read_key()
         if (ir.EventType != KEY_EVENT) continue;
         if (!ir.Event.KeyEvent.bKeyDown) continue;
         switch (ir.Event.KeyEvent.wVirtualKeyCode) {
-        case VK_SHIFT:
-        case VK_LSHIFT:
-        case VK_RSHIFT:
+          case VK_SHIFT:
+          case VK_LSHIFT:
+          case VK_RSHIFT:
             continue;
         }
         k.c = ir.Event.KeyEvent.uChar.AsciiChar;
@@ -683,6 +704,10 @@ key s_read_key()
                 return k;
             }
         }
+        /*if (ir.Event.KeyEvent.dwControlKeyState &
+            (RIGHT_CTRL_PRESSED | LEFT_CTRL_PRESSED)) {
+            k.spc = SPC_PRESSED|CTRL;
+        }*/
         k.spc = NOTHING_SPECIAL;
         return k;
     }
@@ -700,7 +725,7 @@ void s_printcis(char_info *arr, int len, coord c)
 {
     SMALL_RECT ssr;
     CHAR_INFO *sci;
-    int   i;
+    int i;
     
     sci = malloc(len * sizeof *sci);
     ssr = s_sr(c.x, c.y, c.x + len - 1, c.y);
