@@ -101,6 +101,8 @@ void add_newline(struct tfield *tf, struct tf_handle *h);
 void shift_down(struct tfield *tf, short top, short bottom, short *len);
 void shift_up(struct tfield *tf, short top, short bottom, short *len);
 
+void scan_line(char *output, int alloc_size, coord c);
+
 void s_prepare();
 key  s_read_key();
 void s_pstrat(const char *str, coord c);
@@ -118,8 +120,8 @@ HANDLE s_h_in, s_h_out;
 short n; /* used to determine newline presence */
 char *current_fname;
 int saved;
-char str_saved[2] = {228, '\0'};
-char str_unsaved[2] = {229, '\0'};
+char str_saved[2] = {(char) 196, '\0'};
+char str_unsaved[2] = {(char) 193, '\0'};
 
 /* ----------------------------------------------------------------------- */
 /* ------------------------ function definitions ------------------------- */
@@ -209,6 +211,7 @@ struct tfield *read_from_file
             tf -> line[y][x++] = c;
         }
     }
+    fclose(file);
     
     return tf;
 }
@@ -239,6 +242,7 @@ struct tfield *write_to_file(char *filename, struct tfield *tf)
         } else c = tf -> line[y][x++];
         fwrite(&c, sizeof c, 1, file);
     }
+    fclose(file);
     
     return tf;
 }
@@ -326,7 +330,7 @@ void ftfield(struct tfield *tf)
                     ? 'e' : '_', i == h.maxy ? 'm' : '_', h.len[i]); /**/
         }
         s_mvcur(c(tf -> linepos[h.r.y].x + h.r.x, tf -> linepos[h.r.y].y));
-        if (!saved) {
+        if (saved != 1) {
             s_pstrat(str_unsaved, c(4, 2));
         } else {
             s_pstrat(str_saved, c(4, 2));
@@ -338,10 +342,15 @@ void ftfield(struct tfield *tf)
           case NOTHING_SPECIAL:
             /* handle save command */
             if (k.c == 19) {
-                if (saved != -1) {
-                    write_to_file(current_fname, tf);
-                    saved = 1;
+                if (saved == -1) {
+                    current_fname = malloc(60 * sizeof *current_fname);
+                    s_pstrat("File name : ", c(4, 1));
+                    scan_line(current_fname, 60, c(16 ,1));
+                    for (i = 0; i < 71; i++) s_pstrat(" ", c(4 + i, 1));
+                    if (current_fname[0] == '\0') break;
                 }
+                write_to_file(current_fname, tf);
+                saved = 1;
                 break;
             }
             /* insert line if needed */
@@ -618,6 +627,73 @@ void shift_up(struct tfield *tf, short top, short bottom, short *len)
     tf -> line[bottom] = linebuf;
     len[bottom] = lenbuf;
     return;
+}
+
+/* -------------------------- support functions -------------------------- */
+
+void scan_line(char *output, int alloc_size, coord c)
+{
+    key k;
+    coord c_out;
+    int i, i_del, done;
+    
+    for (i = 0; i < alloc_size; i++) output[i] = '\0';
+    i = 0;
+    done = 0;
+    c_out.y = c.y;
+    while (-1) {
+        c_out.x = c.x + i;
+        s_mvcur(c_out);
+        s_pstrat(output, c);
+        
+        k = s_read_key();
+        switch (k.spc) {
+          case NOTHING_SPECIAL:
+            if (i == alloc_size - 1) break;
+            output[i++] = k.c;
+            break;
+          case SPC_ENTER:
+            done = 1;
+            break;
+          case SPC_ESC:
+            done = -1;
+            break;
+          case SPC_LEFT:
+          case SPC_BACK:
+            if (!i) break;
+            i--;
+            if (k.spc == SPC_LEFT) break;
+            goto del_a;
+          case SPC_DEL:
+            if (output[i] == '\0') break;
+           del_a:
+            for (i_del = i; output[i_del + 1] != '\0'; i_del++)
+                output[i_del] = output[i_del + 1];
+            output[i_del] = '\0';
+            c_out.x = c.x + i_del;
+            s_pstrat(" ", c_out);
+            break;
+          case SPC_RIGHT:
+            if (output[i] == '\0') break;
+            i++;
+            break;
+          case SPC_HOME:
+            i = 0;
+            break;
+          case SPC_END:
+            while (output[i] != '\0') i++;
+            break;
+        }
+        if (!done) continue;
+        if (done == -1) {
+            for (i = 0; output[i] != '\0'; i++) {
+                c_out.x = c.x + i;
+                s_pstrat(" ", c_out);
+            }
+            output[0] = '\0';
+        }
+        return;
+    }
 }
 
 /* ----------------- system-dependent functions (s_...) ------------------ */
