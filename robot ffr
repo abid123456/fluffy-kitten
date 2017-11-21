@@ -1,0 +1,119 @@
+#include <Servo.h>
+
+#define s1_in  11
+#define s1_out 12
+#define s2_in  9
+#define s2_out 10
+#define s3_in  7
+#define s3_out 8
+
+#define p_rudder 4
+#define p_fan    3
+#define p_prop   A1
+
+#define forward   100
+#define left_max  70
+#define right_max 160
+
+typedef struct {
+    int output;
+    int input;
+} ultra;
+
+Servo s_rudder, s_fan;
+ultra left = {s1_out, s1_in};
+ultra front = {s2_out, s2_in};
+ultra right = {s3_out, s3_in};
+int finishing = 0;
+int done = 1;
+long i = 0;
+double prev1_ldistance;
+double prev2_ldistance;
+double prev3_ldistance;
+double ddpdt;
+
+void setup() {
+    Serial.begin(9600);
+    
+    pinMode(p_fan, OUTPUT);
+    pinMode(p_prop, OUTPUT);
+    digitalWrite(p_fan, LOW);
+    digitalWrite(p_prop, LOW);
+    
+    s_rudder.attach(p_rudder);
+    s_rudder.write(forward);
+    prev1_ldistance = distance(left);
+    prev2_ldistance = distance(left);
+    prev3_ldistance = distance(left);
+    digitalWrite(p_prop, HIGH);
+}
+
+void loop() {
+    double curr_ldistance, curr_rdistance;
+    /**
+    if (finishing) goto finishing;
+    if (distance(right) < 100) {
+        finishing = 1;
+        goto finishing;
+    } /**/
+    if (!done) return;
+    done = 0;
+    
+    curr_ldistance = distance(left);
+    ddpdt = curr_ldistance - prev1_ldistance;
+    curr_rdistance = distance(right);
+    Serial.print(++i);
+    Serial.print(": kiri=");
+    Serial.print(curr_ldistance);
+    Serial.print(", sblm=");
+    Serial.print(prev1_ldistance);
+    Serial.print(", kanan=");
+    Serial.print(curr_rdistance);
+    Serial.print(", ddpdt=");
+    Serial.print(ddpdt);
+    /**/
+    if (curr_ldistance < 27.5) {
+        Serial.print(", terlalu dekat");
+        s_rudder.write(forward + (32.5 - curr_ldistance) * 3);
+    } else if (curr_rdistance < 27.5) {
+         s_rudder.write(forward - (32.5 - curr_rdistance) * 3);
+         Serial.print(", ke kanan terlalu dekat");
+    } else if (ddpdt > -2 && ddpdt < 2) {
+        s_rudder.write(forward);
+        Serial.print("\0, meluruskan posisi rudder");
+    } else {
+        s_rudder.write(forward - ddpdt * 10);
+    }
+    /**/
+    prev1_ldistance = curr_ldistance;
+    delay(200);
+    done = 1;
+    Serial.print(",akhir\n");
+    return;
+  finishing:
+    delayMicroseconds(250);
+    return;
+}
+
+double distance(ultra u) {
+    long t;
+    double r;
+    int i, repeat = 1;
+    pinMode(u.output, OUTPUT);
+    pinMode(u.input, INPUT);
+    
+    r = 0;
+    for (i = 0; i < repeat; i++) {
+        /* emit ultrasonic beam */
+        digitalWrite(u.output, LOW);
+        delayMicroseconds(5);
+        digitalWrite(u.output, HIGH);
+        delayMicroseconds(15);
+        digitalWrite(u.output, LOW);
+        delayMicroseconds(5);
+        /* receive reflected beam */
+        t = pulseIn(u.input, HIGH) / 2.0;
+        r += t / 29.1;
+    }
+    return r / repeat;
+}
