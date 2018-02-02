@@ -41,6 +41,8 @@
 #define SCR_W           80
 #define SCR_H           25
 
+#define undo_limit      300
+
 /* ------------------------- struct definitions -------------------------- */
 
 typedef struct {
@@ -70,6 +72,11 @@ typedef struct {
     short a;
 } char_info;
 
+typedef struct {
+    int op_id;
+    coord c;
+} operation;
+
 
 struct tfield {
     short width;
@@ -84,24 +91,38 @@ struct tf_handle {
     short *len;
     char *changed;
     coord r;
+    int u_counter;
+    int r_counter;
+    operation u_stack[undo_limit];
+    int u_first;
+    int u_limiter;
 };
 
 /* ------------------------ function declarations ------------------------ */
 
 struct tfield *tfield(short width, short lc, coord *linepos);
-struct tfield *read_from_file(char *filename, short width, short lc,
-                              coord *linepos);
-struct tfield *write_to_file(char *filename, struct tfield *tf);
+struct tfield *read_file(char *fname, short width, short lc, coord *linepos);
+int  write_to_file(char *fname, struct tfield *tf);
+void save(struct tfield *tf);
+int  exit_prompt();
+void mark_unsaved();
+
 void dltfield(struct tfield *tf, short y);
 void dtfield(struct tfield *tf);
 
 void ftfield(struct tfield *tf);
-void delete(struct tfield *tf, struct tf_handle *h);
-void add_newline(struct tfield *tf, struct tf_handle *h);
+int  operate(struct tfield *tf, struct tf_handle *h, operation o);
+
+int  insert_char(struct tfield *tf, struct tf_handle *h, char c);
+int  delete(struct tfield *tf, struct tf_handle *h);
+int  add_newline(struct tfield *tf, struct tf_handle *h);
 void shift_down(struct tfield *tf, short top, short bottom, short *len);
 void shift_up(struct tfield *tf, short top, short bottom, short *len);
+int  move_cursor(struct tfield *tf, struct tf_handle *h, char d);
+void adjust_eocp(struct tfield *tf, struct tf_handle *h);
 
 void scan_line(char *output, int alloc_size, coord c);
+void await_e(coord c);
 
 void s_prepare();
 key  s_read_key();
@@ -117,11 +138,20 @@ COORD s_cfc(coord c);
 /* -------------------------- global variables --------------------------- */
 
 HANDLE s_h_in, s_h_out;
+
 short n; /* used to determine newline presence */
+
+int file_read = 0;
 char *current_fname;
-int saved;
-char str_saved[2] = {(char) 196, '\0'};
-char str_unsaved[2] = {(char) 193, '\0'};
+
+int saved = 0;
+char save_prompt[2];
+const char str_saved[2] = {(char) 196, '\0'};
+const char str_unsaved[2] = {(char) 193, '\0'};
+
+const char right_arrow = 26;
+const char left_arrow = 27;
+int undoing = 0;
 
 /* ----------------------------------------------------------------------- */
 /* ------------------------ function definitions ------------------------- */
@@ -137,8 +167,9 @@ int main(int argc, char *argv[])
     lc = 36;
     if (argc > 1) {
         current_fname = argv[1];
-        tf = read_from_file(argv[1], width, lc, NULL);
-        saved = 1;
+        tf = read_file(argv[1], width, lc, NULL);
+        if (file_read == -1) saved = -1;
+        else saved = 1;
         /* if (argc != 3) {
             printf("Error %d: Invalid number of arguments\n", 1);
             return 1;
@@ -156,9 +187,10 @@ int main(int argc, char *argv[])
         tf -> linepos[i] = c(4, i + 3);
         tf -> linepos[i + tf -> lc / 2] = c(40, i + 3);
     }
+    
     dtfield(tf);
+    if (file_read == 1) s_pstrat(current_fname, c(6, 2));
     ftfield(tf);
-    /* write_to_file(current_fname, tf); */
     
     return 0;
 }
@@ -166,7 +198,7 @@ int main(int argc, char *argv[])
 struct tfield *tfield(short width, short lc, coord *linepos)
 {
     struct tfield *tf;
-    int i, i2;
+    int ix, iy;
     
     tf = malloc(sizeof *tf);
     tf -> width   = width;
@@ -174,18 +206,18 @@ struct tfield *tfield(short width, short lc, coord *linepos)
     tf -> linepos = malloc(lc * sizeof *tf -> linepos);
     tf -> line    = malloc(lc * sizeof *tf -> line);
     
-    for (i = 0; i < lc; i++) {
-        tf -> line[i] = malloc((width + 2) * sizeof **tf -> line);
-        for (i2 = 0; i2 < width + 2; i2++) tf -> line[i][i2] = '\0';
+    for (iy = 0; iy < lc; iy++) {
+        tf -> line[iy] = malloc((width + 2) * sizeof **tf -> line);
+        for (ix = 0; ix < width + 1; ix++) tf -> line[iy][ix] = '\0';
+        tf -> line[iy][width + 1] = 0;
     }
     if (linepos != NULL)
-        for (i = 0; i < lc; i++) tf -> linepos[i] = linepos[i];
+        for (iy = 0; iy < lc; iy++) tf -> linepos[iy] = linepos[iy];
     
     return tf;
 }
 
-struct tfield *read_from_file
-(char *filename, short width, short lc, coord *linepos)
+struct tfield *read_file(char *fname, short width, short lc, coord *linepos)
 {
     struct tfield *tf;
     short x, y;
@@ -193,8 +225,11 @@ struct tfield *read_from_file
     FILE *file;
     
     tf = tfield(width, lc, linepos);
-    file = fopen(filename, "r");
-    if (file == NULL) return tf;
+    file = fopen(fname, "r");
+    if (file == NULL) {
+        file_read = -1;
+        return tf;
+    }
     n = tf -> width + 1;
     
     x = 0;
@@ -213,16 +248,18 @@ struct tfield *read_from_file
     }
     fclose(file);
     
+    file_read = 1;
     return tf;
 }
 
-struct tfield *write_to_file(char *filename, struct tfield *tf)
+int write_to_file(char *fname, struct tfield *tf)
 {
     short x, y;
     char c;
     FILE *file;
     
-    file = fopen(filename, "w");
+    file = fopen(fname, "w");
+    if (file == NULL) return -1;
     n = tf -> width + 1;
     
     x = 0;
@@ -244,7 +281,67 @@ struct tfield *write_to_file(char *filename, struct tfield *tf)
     }
     fclose(file);
     
-    return tf;
+    return 0;
+}
+
+void save(struct tfield *tf)
+{
+    int i;
+    
+    if (saved == -1) {
+        while (-1) {
+            current_fname = malloc(60 * sizeof *current_fname);
+            s_pstrat("File name :          ", c(4, 1));
+            scan_line(current_fname, 60, c(16 ,1));
+            for (i = 0; i < 71; i++) s_pstrat(" ", c(4 + i, 1));
+            
+            if (current_fname[0] == '\0') {
+                free(current_fname);
+                break;
+            }
+            if (write_to_file(current_fname, tf) != 0) {
+                s_pstrat("File cannot be saved.", c(4, 1));
+                await_e(c(25, 1));
+                free(current_fname);
+                continue;
+            }
+            saved = 1;
+            s_pstrat(current_fname, c(6, 2));
+            break;
+        }
+        return;
+    }
+    
+    if (write_to_file(current_fname, tf) != 0) {
+        s_pstrat("File cannot be saved.", c(4, 1));
+        await_e(c(25, 1));
+    } else if (saved == 0) saved = 1;
+    
+    return;
+}
+
+int exit_prompt()
+{
+    int i;
+    
+    s_pstrat("Exit without saving (y/n)?  ", c(4, 1));
+    while (-1) {
+        scan_line(save_prompt, 2, c(31, 1));
+        if (*save_prompt == 'y' || *save_prompt == 'Y')
+            return 1;
+        if (*save_prompt == 'n' || *save_prompt == 'N') {
+            for (i = 0; i < 28; i++) s_pstrat(" ", c(4 + i, 1));
+            return 0;
+        }
+        s_pstrat(" ", c(31, 1));
+    }
+    return 0;
+}
+
+void mark_unsaved()
+{
+    if (saved != -1) saved = 0;
+    return;
 }
 
 void dltfield(struct tfield *tf, short y)
@@ -278,9 +375,9 @@ void dltfield(struct tfield *tf, short y)
 
 void dtfield(struct tfield *tf)
 {
-    int i;
+    int iy;
     
-    for (i = 0; i < tf -> lc; i++) dltfield(tf, i);
+    for (iy = 0; iy < tf -> lc; iy++) dltfield(tf, iy);
     
     return;
 }
@@ -289,11 +386,16 @@ void ftfield(struct tfield *tf)
 {
     struct tf_handle h;
     
-    int i, i2, i3, postrx;
+    int iy;
+    operation o;
     key k;
+    char u_display[6];
+    int k_c_ns, h_r_counter_temp;
     
     /* init some variables */
     n = tf -> width + 1;
+    
+    k_c_ns = 0;
     
     h.r.x = 0;
     h.r.y = 0;
@@ -302,14 +404,19 @@ void ftfield(struct tfield *tf)
     h.changed = calloc(tf -> lc, sizeof *h.changed);
     h.len = calloc(tf -> lc, sizeof *h.len);
     
+    h.u_counter = 0;
+    h.r_counter = 0;
+    h.u_first = 0;
+    h.u_limiter = 0;
+    
     /* init len members and maxy */
     h.maxy = -1;
-    for (i = 0; i < tf -> lc; i++) {
-        h.len[i] = strlen(tf -> line[i]);
-        if (!h.len[i] && !tf -> line[i][n]) {
-            if (!i) h.maxy = 0;
-            else if (tf -> line[i - 1][n]) h.maxy = i;
-            else h.maxy = i - 1;
+    for (iy = 0; iy < tf -> lc; iy++) {
+        h.len[iy] = strlen(tf -> line[iy]);
+        if (!h.len[iy] && !tf -> line[iy][n]) {
+            if (!iy) h.maxy = 0;
+            else if (tf -> line[iy - 1][n]) h.maxy = iy;
+            else h.maxy = iy - 1;
             break;
         }
     }
@@ -317,122 +424,91 @@ void ftfield(struct tfield *tf)
     
     /* main loop */
     while (-1) {
-        /* adjust eocp */
-        while (h.eocp != h.maxy && !tf -> line[h.eocp][n]) h.eocp++;
+        adjust_eocp(tf, &h);
         
         /* update display */
-        for (i = 0; i < tf -> lc; i++) {
-            /** if (h.changed[i]) { /**/
-                dltfield(tf, i);
-                h.changed[i] = 0;
-            /** } /**
-            printf("%c%c%c%02x", tf -> line[i][n] ? 'n' : '_', i == h.eocp
-                    ? 'e' : '_', i == h.maxy ? 'm' : '_', h.len[i]); /**/
+        for (iy = 0; iy < tf -> lc; iy++) {
+            if (h.changed[iy]) {
+                dltfield(tf, iy);
+                h.changed[iy] = 0;
+            } /**
+            printf("%c%c%c%02x", tf -> line[iy][n] ? 'n' : '_', iy == h.eocp
+                    ? 'e' : '_', iy == h.maxy ? 'm' : '_', h.len[iy]); /**/
         }
+        
         s_mvcur(c(tf -> linepos[h.r.y].x + h.r.x, tf -> linepos[h.r.y].y));
-        if (saved != 1) {
-            s_pstrat(str_unsaved, c(4, 2));
-        } else {
-            s_pstrat(str_saved, c(4, 2));
-        }
+        
+        if (saved != 1)  s_pstrat(str_unsaved, c(4, 2));
+        else s_pstrat(str_saved, c(4, 2));
+        sprintf(u_display, "%c %d  ", left_arrow, h.u_counter);
+        s_pstrat(u_display, c(4, 0));
+        sprintf(u_display, "%c %d  ", right_arrow, h.r_counter);
+        s_pstrat(u_display, c(10, 0));
         
         /* input and main switch */
         k = s_read_key();
         switch (k.spc) {
           case NOTHING_SPECIAL:
-            /* handle save command */
-            if (k.c == 19) {
-                if (saved == -1) {
-                    current_fname = malloc(60 * sizeof *current_fname);
-                    s_pstrat("File name : ", c(4, 1));
-                    scan_line(current_fname, 60, c(16 ,1));
-                    for (i = 0; i < 71; i++) s_pstrat(" ", c(4 + i, 1));
-                    if (current_fname[0] == '\0') break;
-                }
-                write_to_file(current_fname, tf);
-                saved = 1;
+            k_c_ns = 0;
+            switch ((int) k.c) {
+              case 19: /* if saving */
+                save(tf);
+                break;
+              case 26: /* if undoing */
+                if (!h.u_counter) break;
+                if (--h.u_limiter < 0) h.u_limiter = undo_limit - 1;
+                undoing = 1;
+                operate(tf, &h, h.u_stack[h.u_limiter]);
+                undoing = 0;
+                h.u_counter--;
+                h.r_counter++;
+                break;
+              case 25: /* if redoing */
+                if (!h.r_counter) break;
+                h_r_counter_temp = h.r_counter - 1;
+                if (h.u_stack[h.u_limiter].op_id & 0xff == NOTHING_SPECIAL)
+                    k_c_ns = -1;
+                operate(tf, &h, h.u_stack[h.u_limiter]);
+                h.r_counter = h_r_counter_temp;
+                break;
+              default:
+                k_c_ns = 1;
                 break;
             }
-            /* insert line if needed */
-            if (h.len[h.eocp] == tf -> width) {
-                if (h.maxy == tf -> lc - 1) break;
-                shift_down(tf, ++h.eocp, h.maxy++, h.len);
-                if (h.eocp != h.maxy) {
-                    tf -> line[h.eocp - 1][n] = 0;
-                    tf -> line[h.eocp][n] = 1;
-                }
-                for (i = h.maxy; i > h.eocp; i--) h.changed[i] = 1;
-                if (h.r.x == tf -> width) {
-                    h.r.x = 0;
-                    h.r.y++;
-                }
-            }
-            /* shift characters within current paragraph */
-            if (h.r.y != h.eocp) {
-                for (i = h.len[h.eocp]; i; i--)
-                    tf -> line[h.eocp][i] = tf -> line[h.eocp][i - 1];
-                tf -> line[h.eocp][0]
-                = tf -> line[h.eocp - 1][tf -> width - 1];
-                for (i2 = h.eocp - 1; i2 > h.r.y; i2--) {
-                    for (i = tf -> width - 1; i; i--)
-                        tf -> line[i2][i] = tf -> line[i2][i - 1];
-                    tf -> line[i2][0] = tf -> line[i2 - 1][tf -> width - 1];
-                }
-                i = tf -> width - 1;
-            } else i = h.len[h.r.y];
-            for (; i > h.r.x; i--)
-                tf -> line[h.r.y][i] = tf -> line[h.r.y][i - 1];
-            /* insert character */
-            tf -> line[h.r.y][h.r.x] = k.c;
-            h.len[h.eocp]++;
-            for (i = h.r.y; i <= h.eocp; i++) h.changed[i] = 1;
-            if (saved != -1) saved = 0;
+            if (!k_c_ns) break;
+            if (k_c_ns == -1) goto move_right;
+            o.op_id = k.spc + 0x100 * (unsigned char) k.c;
+            o.c = h.r;
+            if (operate(tf, &h, o) != 0) break;
+            mark_unsaved();
+           move_right:
+            k.spc = SPC_RIGHT;
           case SPC_RIGHT:
-            if (h.r.x < h.len[h.r.y] &&
-                (h.r.y == h.eocp || h.r.x < tf -> width - 1)) {
-                h.r.x++;
-                break;
-            }
           case SPC_DOWN:
-            if (h.r.y == h.maxy) break;
-            if (tf -> line[h.r.y++][n]) h.eocp++;
-            if (k.spc & SPC_RIGHT_OR_NS) {
-                h.r.x = 0;
-                break;
-            }
-            goto check_x_coord;
           case SPC_LEFT:
           case SPC_BACK:
-            if (h.r.x) {
-                h.r.x--;
-                goto check_key;
-            }
           case SPC_UP:
-            if (!h.r.y) break;
-            if (tf -> line[--h.r.y][n]) h.eocp = h.r.y;
-           check_x_coord:
-            if ((k.spc & SPC_VERTICAL) && h.r.x <= h.len[h.r.y])
-                goto adjust_rx;
-          case SPC_END:
-            h.r.x = h.len[h.r.y];
-           adjust_rx:
-            if (h.r.x == tf -> width &&
-                !(tf -> line[h.r.y][n] || h.r.y == h.maxy)) h.r.x--;
-           check_key:
-            if (k.spc != SPC_BACK) break;
-          case SPC_DEL:
-            delete(tf, &h);
-            if (saved != -1) saved = 0;
-            break;
-          case SPC_ENTER:
-            add_newline(tf, &h);
-            if (saved != -1) saved = 0;
-            break;
           case SPC_HOME:
-            h.r.x = 0;
+          case SPC_END:
+            if (move_cursor(tf, &h, k.spc) != 0) break;
+            if (k.spc != SPC_BACK) break;
+            k.spc = SPC_DEL;
+          case SPC_DEL:
+          case SPC_ENTER:
+            o.op_id = k.spc;
+            o.c = h.r;
+            operate(tf, &h, o);
+            mark_unsaved();
             break;
           case SPC_ESC:
-            return;
+            switch (saved) {
+              case -1:
+                if (h.maxy == 0 && h.len[0] == 0) return;
+              case 0:
+                if (!exit_prompt()) break;
+              case 1:
+                return;
+            }
         }
     }
     return;
@@ -440,47 +516,141 @@ void ftfield(struct tfield *tf)
 
 /* ------------------------ ftfield subfunctions ------------------------- */
 
-void delete(struct tfield *tf, struct tf_handle *h)
+int operate(struct tfield *tf, struct tf_handle *h, operation o)
 {
-    int i, i2, i3;
+    int r;
+    operation o_inverse;
+    /**/ char str[100]; /**/
+    
+    h -> r = o.c;
+    h -> eocp = h -> r.y;
+    adjust_eocp(tf, h);
+    /**/
+    sprintf(str, "(%d,%d),e=%d          ",
+    h -> r.x, h -> r.y, h -> eocp);
+    s_pstrat(str, c(15,0)); /**/
+    switch (o.op_id & 0xff) {
+      case NOTHING_SPECIAL:
+        o.op_id >>= 8;
+        /**/ sprintf(str, "%d   ", o.op_id);
+        s_pstrat(str, c(0,0)); /**/
+        if ((r = insert_char(tf, h, (char) o.op_id)) < 0) return r;
+        o_inverse.c = o.c;
+        o_inverse.op_id = SPC_DEL;
+        break;
+      case SPC_DEL:
+        if ((r = delete(tf, h)) < 0) return r;
+        o_inverse.c = h -> r;
+        o_inverse.op_id = r == 0xffff ?
+                        SPC_ENTER : (NOTHING_SPECIAL + 0x100 * r);
+        break;
+      case SPC_ENTER:
+        if ((r = add_newline(tf, h)) < 0) return r;
+        o_inverse.c = o.c;
+        o_inverse.op_id = SPC_DEL;
+        break;
+    }
+    
+    h -> u_stack[h -> u_limiter] = o_inverse;
+    if (!undoing) {
+        if (++h -> u_limiter == undo_limit) h -> u_limiter = 0;
+        if (h -> u_counter == undo_limit) h -> u_first = h -> u_limiter;
+        else h -> u_counter++;
+        h -> r_counter = 0;
+    }
+    
+    return 0;
+}
+
+int insert_char(struct tfield *tf, struct tf_handle *h, char c)
+{
+    int ix, iy;
+    
+    /* insert line if needed */
+    if (h -> len[h -> eocp] == tf -> width) {
+        if (h -> maxy == tf -> lc - 1) return -1;
+        shift_down(tf, ++h -> eocp, h -> maxy++, h -> len);
+        if (h -> eocp != h -> maxy) {
+            tf -> line[h -> eocp - 1][n] = 0;
+            tf -> line[h -> eocp][n] = 1;
+        }
+        for (iy = h -> maxy; iy > h -> eocp; iy--) h -> changed[iy] = 1;
+        if (h -> r.x == tf -> width) {
+            h -> r.x = 0;
+            h -> r.y++;
+        }
+    }
+    /* shift characters within current paragraph */
+    if (h -> r.y != h -> eocp) {
+        for (ix = h -> len[h -> eocp]; ix; ix--)
+            tf -> line[h -> eocp][ix] = tf -> line[h -> eocp][ix - 1];
+        tf -> line[h -> eocp][0] =
+          tf -> line[h -> eocp - 1][tf -> width - 1];
+        for (iy = h -> eocp - 1; iy > h -> r.y; iy--) {
+            for (ix = tf -> width - 1; ix; ix--)
+                tf -> line[iy][ix] = tf -> line[iy][ix - 1];
+            tf -> line[iy][0] = tf -> line[iy - 1][tf -> width - 1];
+        }
+        ix = tf -> width - 1;
+    } else ix = h -> len[h -> r.y];
+    for (; ix > h -> r.x; ix--)
+        tf -> line[h -> r.y][ix] = tf -> line[h -> r.y][ix - 1];
+    /* insert character */
+    tf -> line[h -> r.y][h -> r.x] = c;
+    h -> len[h -> eocp]++;
+    for (iy = h -> r.y; iy <= h -> eocp; iy++) h -> changed[iy] = 1;
+    
+    return 0;
+}
+
+int delete(struct tfield *tf, struct tf_handle *h)
+{
+    int ix, iy, ix_limiter, lshift_length, r;
     short postrx;
     
-    if (h -> r.y == h -> maxy && h -> r.x == h -> len[h -> r.y]) return;
+    if (h -> r.y == h -> maxy && h -> r.x == h -> len[h -> r.y]) return -1;
     if (!tf -> line[h -> r.y][n] || h -> r.x != h -> len[h -> r.y]) {
         /* deleting a character */
-        i2 = h -> len[h -> r.y] - 1;
-        for (i = h -> r.x;  i < i2; i++)
-            tf -> line[h -> r.y][i] = tf -> line[h -> r.y][i + 1];
+        r = (unsigned char) tf -> line[h -> r.y][h -> r.x];
+        ix_limiter = h -> len[h -> r.y] - 1;
+        for (ix = h -> r.x;  ix < ix_limiter; ix++)
+            tf -> line[h -> r.y][ix] = tf -> line[h -> r.y][ix + 1];
         if (h -> r.y == h -> eocp) {
             tf -> line[h -> r.y][--h -> len[h -> r.y]] = '\0';
             h -> changed[h -> r.y] = 1;
-            return;
+            return r;
         }
         h -> len[h -> r.y]--;
-        i3 = tf -> width - 1;
+        lshift_length = tf -> width - 1;
         postrx = 1;
+        r = 0;
     } else { /* deleting a \n */
+        r = 0xffff;
         tf -> line[h -> r.y][n] = 0;
-        i3 = h -> r.x;
+        if (h -> r.x == tf -> width) {
+            h -> r.x = 0;
+            h -> r.y++;
+            return r;
+        }
+        lshift_length = h -> r.x;
         postrx = tf -> width - h -> r.x;
-        while (h -> eocp < h -> maxy && !tf -> line[h -> eocp][n])
-            h -> eocp++;
+        adjust_eocp(tf, h);
     }
     /* shifting */
-    for (i2 = h -> r.y + 1; i2 < h -> eocp; i2++) {
-        for (i = i3; i < tf -> width; i++)
-            tf -> line[i2 - 1][i] = tf -> line[i2][i - i3];
-        for (i = 0; i < i3; i++)
-            tf -> line[i2][i] = tf -> line[i2][postrx + i];
+    for (iy = h -> r.y + 1; iy < h -> eocp; iy++) {
+        for (ix = lshift_length; ix < tf -> width; ix++)
+            tf -> line[iy - 1][ix] = tf -> line[iy][ix - lshift_length];
+        for (ix = 0; ix < lshift_length; ix++)
+            tf -> line[iy][ix] = tf -> line[iy][postrx + ix];
     }
     if (h -> len[h -> eocp] <= postrx) { /* shift up */
-        i2 = i3 + h -> len[h -> eocp--];
-        for (i = i3; i < i2; i++) {
-            tf -> line[h -> eocp][i] = tf -> line[h -> eocp + 1][i - i3];
-            tf -> line[h -> eocp + 1][i - i3] = '\0';
+        ix_limiter = lshift_length + h -> len[h -> eocp--];
+        for (ix = lshift_length; ix < ix_limiter; ix++) {
+            tf -> line[h -> eocp][ix] = tf -> line[h -> eocp + 1][ix - lshift_length];
+            tf -> line[h -> eocp + 1][ix - lshift_length] = '\0';
         }
-        while (i < tf -> width)
-            tf -> line[h -> eocp][i++] = '\0';
+        while (ix < tf -> width)
+            tf -> line[h -> eocp][ix++] = '\0';
         h -> len[h -> eocp] = h -> len[h -> r.y] + h -> len[h -> eocp + 1];
         if (h -> eocp != h -> r.y) h -> len[h -> r.y] = tf -> width;
         h -> len[h -> eocp + 1] = 0;
@@ -488,23 +658,25 @@ void delete(struct tfield *tf, struct tf_handle *h)
             tf -> line[h -> eocp + 1][n] = 0;
             tf -> line[h -> eocp][n] = 1;
         }
-        shift_up(tf, h -> eocp + 2, h -> maxy--, h -> len);
+        shift_up(tf, h -> eocp + 2, h -> maxy, h -> len);
+        for (iy = h -> eocp + 1; iy <= h -> maxy; iy++) h -> changed[iy] = 1;
+        h -> maxy--;
     } else { /* no shift up */
-        for (i = i3; i < tf -> width; i++)
-            tf -> line[h -> eocp - 1][i] = tf -> line[h -> eocp][i - i3];
-        i2 = h -> len[h -> eocp] - postrx;
-        for (i = 0; i < i2; i++)
-            tf -> line[h -> eocp][i] = tf -> line[h -> eocp][postrx + i];
-        while (i < h -> len[h -> eocp])
-            tf -> line[h -> eocp][i++] = '\0';
+        for (ix = lshift_length; ix < tf -> width; ix++)
+            tf -> line[h -> eocp - 1][ix] = tf -> line[h -> eocp][ix - lshift_length];
+        ix_limiter = h -> len[h -> eocp] - postrx;
+        for (ix = 0; ix < ix_limiter; ix++)
+            tf -> line[h -> eocp][ix] = tf -> line[h -> eocp][postrx + ix];
+        while (ix < h -> len[h -> eocp])
+            tf -> line[h -> eocp][ix++] = '\0';
         h -> len[h -> r.y] = tf -> width;
         h -> len[h -> eocp] -= postrx;
     }
-    for (i = h -> r.y; i <= h -> eocp; i++) h -> changed[i] = 1;
-    return;
+    for (iy = h -> r.y; iy <= h -> eocp; iy++) h -> changed[iy] = 1;
+    return r;
 }
 
-void add_newline(struct tfield *tf, struct tf_handle *h)
+int add_newline(struct tfield *tf, struct tf_handle *h)
 {
     int case_n;
     short ix, iy, postrx, shift_top;
@@ -516,7 +688,7 @@ void add_newline(struct tfield *tf, struct tf_handle *h)
             case_n = 3; /* immediately after a newline */
         else {
             tf -> line[h -> r.y - 1][n] = 1;
-            return;
+            return 0;
         }
     } else {
         if (h -> r.x < h -> len[h -> eocp])
@@ -526,7 +698,7 @@ void add_newline(struct tfield *tf, struct tf_handle *h)
         6;   /* cursor in a line with a newline */
         else case_n = 0;
     }
-    if (h -> maxy == tf -> lc - 1) return;
+    if (case_n && h -> maxy == tf -> lc - 1) return -1;
     
     /* using case_n */
     if (case_n && case_n != 2) { /* 1, 3, 6, or 8 */
@@ -563,9 +735,10 @@ void add_newline(struct tfield *tf, struct tf_handle *h)
     } else { /* 0 */
         for (ix = h -> len[h -> eocp] + postrx - 1; ix >= postrx; ix--)
             tf -> line[h -> eocp][ix] = tf -> line[h -> eocp][ix - postrx];
-        for (ix = h -> r.x; ix < tf -> width; ix++)
-            tf -> line[h -> eocp][ix - h -> r.x]
-        = tf -> line[h -> eocp - 1][ix];
+        for (ix = h -> r.x; ix < tf -> width; ix++) {
+            tf -> line[h -> eocp][ix - h -> r.x] =
+              tf -> line[h -> eocp - 1][ix];
+        }
         iy = h -> eocp - 1;
     }
     /* shifting within current paragraph */
@@ -588,23 +761,23 @@ void add_newline(struct tfield *tf, struct tf_handle *h)
     h -> len[h -> r.y] = h -> r.x;
   an_change_h:
     if (case_n) h -> maxy++;
-    for (iy = h -> maxy; iy >= h -> r.y; iy--) h -> changed[iy] = 1;
+    for (iy = h -> r.y; iy <= h -> maxy; iy++) h -> changed[iy] = 1;
     h -> eocp = ++h -> r.y;
     h -> r.x = 0;
-    return;
+    return 0;
 }
 
 void shift_down(struct tfield *tf, short top, short bottom, short *len)
 {
     char *linebuf;
     short lenbuf;
-    int   i;
+    int   iy;
     
     linebuf = tf -> line[++bottom];
     lenbuf  = len[bottom];
-    for (i = bottom; i > top; i--) {
-        tf -> line[i] = tf -> line[i - 1];
-        len[i] = len[i - 1];
+    for (iy = bottom; iy > top; iy--) {
+        tf -> line[iy] = tf -> line[iy - 1];
+        len[iy] = len[iy - 1];
     }
     tf -> line[top] = linebuf;
     len[top] = lenbuf;
@@ -616,16 +789,61 @@ void shift_up(struct tfield *tf, short top, short bottom, short *len)
 {
     char *linebuf;
     short lenbuf;
-    int   i;
+    int   iy;
     
     linebuf = tf -> line[--top];
     lenbuf  = len[top];
-    for (i = top; i < bottom; i++) {
-        tf -> line[i] = tf -> line[i + 1];
-        len[i] = len[i + 1];
+    for (iy = top; iy < bottom; iy++) {
+        tf -> line[iy] = tf -> line[iy + 1];
+        len[iy] = len[iy + 1];
     }
     tf -> line[bottom] = linebuf;
     len[bottom] = lenbuf;
+    return;
+}
+
+int move_cursor(struct tfield *tf, struct tf_handle *h, char d)
+{
+    switch (d) {
+      case SPC_RIGHT:
+        if (h -> r.x < h -> len[h -> r.y] &&
+            (h -> r.y == h -> eocp || h -> r.x < tf -> width - 1)) {
+            h -> r.x++;
+            return 0;
+        }
+      case SPC_DOWN:
+        if (h -> r.y == h -> maxy) return -1;
+        if (tf -> line[h -> r.y++][n]) h -> eocp++;
+        if (d & SPC_RIGHT_OR_NS) goto cr;
+        goto check_x_coord;
+      case SPC_LEFT:
+      case SPC_BACK:
+        if (h -> r.x) {
+            h -> r.x--;
+            return 0;
+        }
+      case SPC_UP:
+        if (!h -> r.y) return -2;
+        if (tf -> line[--h -> r.y][n]) h -> eocp = h -> r.y;
+       check_x_coord:
+        if ((d & SPC_VERTICAL) && h -> r.x <= h -> len[h -> r.y])
+            goto adjust_rx;
+      case SPC_END:
+        h -> r.x = h -> len[h -> r.y];
+       adjust_rx:
+        if (h -> r.x == tf -> width &&
+            !(tf -> line[h -> r.y][n] || h -> r.y == h -> maxy)) h -> r.x--;
+        return 0;
+      case SPC_HOME:
+       cr:
+        h -> r.x = 0;
+        return 0;
+    }
+}
+
+void adjust_eocp(struct tfield *tf, struct tf_handle *h)
+{
+    while (h -> eocp != h -> maxy && !tf -> line[h -> eocp][n]) h -> eocp++;
     return;
 }
 
@@ -694,6 +912,14 @@ void scan_line(char *output, int alloc_size, coord c)
         }
         return;
     }
+}
+
+void await_e(coord c)
+{
+    char buffer[1];
+    
+    scan_line(buffer, 1, c);
+    return;
 }
 
 /* ----------------- system-dependent functions (s_...) ------------------ */
