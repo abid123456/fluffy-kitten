@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <conio.h>
 
 #define mem_size 65536
 /** #define debug /**/
@@ -7,6 +8,16 @@
 #define oc_MOVB 0x18
 #define oc_SUB  0x30
 #define oc_CMP  0x38
+
+#define oc_JE   0x20
+#define oc_JNE  0x22
+#define oc_JL   0x24
+#define oc_JG   0x26
+#define oc_JLE  0x28
+#define oc_JGE  0x2a
+
+#define op_jmp_A 0x00
+#define op_jmp_P 0x01
 
 #define op28_R_R 0x00
 #define op28_R_I 0x01
@@ -61,7 +72,7 @@ void take_address()
 int main()
 {
     FILE *fp;
-    int i;
+    int i, i2;
     
     fp = fopen("disk_file", "rb");
     for (i = 0; i < mem_size; i++)
@@ -78,10 +89,25 @@ int main()
         }
     }
     ip = memory;
+    #ifdef debug
+    puts("memory:");
+    for (i = 0; i < 10; i++) {
+        for (i2 = 0; i2 < 16; i2++) {
+            printf("%s%02x", i2 ? " " : "", (int) ip[16 * i + i2]);
+        }
+        puts("");
+    }
+    puts("");
+    #endif
     while (-1) {
         #ifdef debug
-        /**/printf("%02x,%02x,%02x,(%2d %02x)",
-        memory[4096], memory[4097], memory[4098], (ip - memory), (int) *ip);
+        /**/printf("%02x,%02x,%02x,(%2d:%02x %02x %02x %02x %02x)",
+        memory[4096], memory[4097], memory[4098], (ip - memory), (int) *ip,
+        (int) ip[1], (int) ip[2], (int) ip[3], (int) ip[4]);
+        if (getch() == '\e') {
+            puts("");
+            return 0;
+        }
         /**/
         #endif
         switch(*ip) {
@@ -357,18 +383,16 @@ int main()
             if (regs[addr_r] < (*++ip)) {
                 regs[r_fl] &= (~flag_z);
                 
-                regs[addr_r++] -= *(ip++);
-                if (regs[addr_r]-- <= *ip) regs[r_fl] |= flag_o;
+                if (regs[++addr_r] <= (*++ip)) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                regs[addr_r] -= *ip;
             } else {
-                regs[addr_r++] -= *(ip++);
+                if (regs[addr_r++] == *(ip++))  {
+                    if (regs[addr_r] == *ip) regs[r_fl] |= flag_z;
+                    else regs[r_fl] &= (~flag_z);
+                } else regs[r_fl] &= (~flag_z);
+                
                 if (regs[addr_r] < *ip) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                regs[addr_r] -= *ip;
-                if (regs[addr_r] == 0 && regs[addr_r - 1] == 0)
-                    regs[r_fl] |= flag_z;
-                else regs[r_fl] &= (~flag_z);
             }
             break;
           case oc_CMP | op28_M_I:
@@ -376,18 +400,16 @@ int main()
             if (memory[addr_1] < (*++ip)) {
                 regs[r_fl] &= (~flag_z);
                 
-                memory[addr_1++] -= *(ip++);
-                if (memory[addr_1]-- <= *ip) regs[r_fl] |= flag_o;
+                if (memory[++addr_1] <= (*++ip)) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                memory[addr_1] -= *ip;
             } else {
-                memory[addr_1++] -= *(ip++);
+                if (memory[addr_1++] == *(ip++)) {
+                    if (memory[addr_1] == *ip) regs[r_fl] |= flag_z;
+                    else regs[r_fl] &= (~flag_z);
+                } else regs[r_fl] &= (~flag_z);
+                
                 if (memory[addr_1] < *ip) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                memory[addr_1] -= *ip;
-                if (memory[addr_1] == 0 && memory[addr_1 - 1] == 0)
-                    regs[r_fl] |= flag_z;
-                else regs[r_fl] &= (~flag_z);
             }
             break;
           case oc_CMP | op28_D_I:
@@ -395,18 +417,16 @@ int main()
             if (memory[addr_1] < (*++ip)) {
                 regs[r_fl] &= (~flag_z);
                 
-                memory[addr_1++] -= *(ip++);
-                if (memory[addr_1]-- <= *ip) regs[r_fl] |= flag_o;
+                if (memory[++addr_1] <= (*++ip)) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                memory[addr_1] -= *ip;
             } else {
-                memory[addr_1++] -= *(ip++);
+                if (memory[addr_1++] == *(ip++)) {
+                    if (memory[addr_1] == *ip) regs[r_fl] |= flag_z;
+                    else regs[r_fl] &= (~flag_z);
+                } else regs[r_fl] &= (~flag_z);
+                
                 if (memory[addr_1] < *ip) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                memory[addr_1] -= *ip;
-                if (memory[addr_1] == 0 && memory[addr_1 - 1] == 0)
-                    regs[r_fl] |= flag_z;
-                else regs[r_fl] &= (~flag_z);
             }
             break;
           case oc_CMP | op28_M_R:
@@ -415,18 +435,16 @@ int main()
             if (memory[addr_1] < regs[addr_r]) {
                 regs[r_fl] &= (~flag_z);
                 
-                memory[addr_1++] -= regs[addr_r++];
-                if (memory[addr_1]-- <= regs[addr_r]) regs[r_fl] |= flag_o;
+                if (memory[++addr_1] <= regs[++addr_r]) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                memory[addr_1] -= regs[addr_r];
             } else {
-                memory[addr_1++] -= regs[addr_r++];
+                if (memory[addr_1++] == regs[addr_r++]) {
+                    if (memory[addr_1] == regs[addr_r]) regs[r_fl] |= flag_z;
+                    else regs[r_fl] &= (~flag_z);
+                } else regs[r_fl] &= (~flag_z);
+                
                 if (memory[addr_1] < regs[addr_r]) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                memory[addr_1] -= regs[addr_r];
-                if (memory[addr_1] == 0 && memory[addr_1 - 1] == 0)
-                    regs[r_fl] |= flag_z;
-                else regs[r_fl] &= (~flag_z);
             }
             break;
           case oc_CMP | op28_D_R:
@@ -435,18 +453,16 @@ int main()
             if (memory[addr_1] < regs[addr_r]) {
                 regs[r_fl] &= (~flag_z);
                 
-                memory[addr_1++] -= regs[addr_r++];
-                if (memory[addr_1]-- <= regs[addr_r]) regs[r_fl] |= flag_o;
+                if (memory[++addr_1] <= regs[++addr_r]) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                memory[addr_1] -= regs[addr_r];
             } else {
-                memory[addr_1++] -= regs[addr_r++];
+                if (memory[addr_1++] == regs[addr_r++]) {
+                    if (memory[addr_1] == regs[addr_r]) regs[r_fl] |= flag_z;
+                    else regs[r_fl] &= (~flag_z);
+                } else regs[r_fl] &= (~flag_z);
+                
                 if (memory[addr_1] < regs[addr_r]) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                memory[addr_1] -= regs[addr_r];
-                if (memory[addr_1] == 0 && memory[addr_1 - 1] == 0)
-                    regs[r_fl] |= flag_z;
-                else regs[r_fl] &= (~flag_z);
             }
             break;
           case oc_CMP | op28_R_M:
@@ -455,18 +471,16 @@ int main()
             if (regs[addr_r] < memory[addr_1]) {
                 regs[r_fl] &= (~flag_z);
                 
-                regs[addr_r++] -= memory[addr_1++];
-                if (regs[addr_r]-- <= memory[addr_1]) regs[r_fl] |= flag_o;
+                if (regs[++addr_r] <= memory[++addr_1]) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                regs[addr_r] -= memory[addr_1];
             } else {
-                regs[addr_r++] -= memory[addr_1++];
+                if (regs[addr_r++] == memory[addr_1++]) {
+                    if (regs[addr_r] == memory[addr_1]) regs[r_fl] |= flag_z;
+                    else regs[r_fl] &= (~flag_z);
+                } else regs[r_fl] &= (~flag_z);
+                
                 if (regs[addr_r] < memory[addr_1]) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                regs[addr_r] -= memory[addr_1];
-                if (regs[addr_r] == 0 && regs[addr_r - 1] == 0)
-                    regs[r_fl] |= flag_z;
-                else regs[r_fl] &= (~flag_z);
             }
             break;
           case oc_CMP | op28_R_D:
@@ -475,51 +489,118 @@ int main()
             if (regs[addr_r] < memory[addr_1]) {
                 regs[r_fl] &= (~flag_z);
                 
-                regs[addr_r++] -= memory[addr_1++];
-                if (regs[addr_r]-- <= memory[addr_1]) regs[r_fl] |= flag_o;
+                if (regs[++addr_r] <= memory[++addr_1]) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                regs[addr_r] -= memory[addr_1];
             } else {
-                regs[addr_r++] -= memory[addr_1++];
+                if (regs[addr_r++] == memory[addr_1++]) {
+                    if (regs[addr_r] == memory[addr_1]) regs[r_fl] |= flag_z;
+                    else regs[r_fl] &= (~flag_z);
+                } else regs[r_fl] &= (~flag_z);
+                
                 if (regs[addr_r] < memory[addr_1]) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
-                regs[addr_r] -= memory[addr_1];
-                if (regs[addr_r] == 0 && regs[addr_r - 1] == 0)
-                    regs[r_fl] |= flag_z;
-                else regs[r_fl] &= (~flag_z);
             }
             break;
             
           /* --- Jump operations --- */
-          case 0x20:
-            take_address();
+          case oc_JE | op_jmp_A:
             addr_j = (*++ip);
             addr_j += (*++ip) << 8;
-            if (memory[addr_1] == regs[0] + (regs[1] << 8))
+            if (regs[r_fl] & flag_z)
                 ip = memory + addr_j - 1;
+            
             break;
-          case 0x21:
-            take_pointer();
-            addr_j = (*++ip);
-            addr_j += (*++ip) << 8;
-            if (memory[addr_1] == regs[0] + (regs[1] << 8))
+          case oc_JE | op_jmp_P:
+            addr_p = (*++ip);
+            addr_p += (*++ip) << 8;
+            addr_j = memory[addr_p];
+            addr_j += memory[addr_p + 1] << 8;
+            if (regs[r_fl] & flag_z)
                 ip = memory + addr_j - 1;
+            
             break;
-          case 0x22:
-            take_address();
+          case oc_JNE | op_jmp_A:
             addr_j = (*++ip);
             addr_j += (*++ip) << 8;
-            if (memory[addr_1] != regs[0] + (regs[1] << 8))
+            if (!(regs[r_fl] & flag_z))
                 ip = memory + addr_j - 1;
+            
             break;
-          case 0x23:
-            take_pointer();
+          case oc_JNE | op_jmp_P:
+            addr_p = (*++ip);
+            addr_p += (*++ip) << 8;
+            addr_j = memory[addr_p];
+            addr_j += memory[addr_p + 1] << 8;
+            if (!(regs[r_fl] & flag_z))
+                ip = memory + addr_j - 1;
+            
+            break;
+          case oc_JL | op_jmp_A:
             addr_j = (*++ip);
             addr_j += (*++ip) << 8;
-            if (memory[addr_1] != regs[0] + (regs[1] << 8))
+            if (regs[r_fl] & flag_o)
                 ip = memory + addr_j - 1;
+            
+            break;
+          case oc_JL | op_jmp_P:
+            addr_p = (*++ip);
+            addr_p += (*++ip) << 8;
+            addr_j = memory[addr_p];
+            addr_j += memory[addr_p + 1] << 8;
+            if (regs[r_fl] & flag_o)
+                ip = memory + addr_j - 1;
+            
+            break;
+          case oc_JG | op_jmp_A:
+            addr_j = (*++ip);
+            addr_j += (*++ip) << 8;
+            if (!(regs[r_fl] & (flag_z | flag_o)))
+                ip = memory + addr_j - 1;
+            
+            break;
+          case oc_JG | op_jmp_P:
+            addr_p = (*++ip);
+            addr_p += (*++ip) << 8;
+            addr_j = memory[addr_p];
+            addr_j += memory[addr_p + 1] << 8;
+            if (!(regs[r_fl] & (flag_z | flag_o)))
+                ip = memory + addr_j - 1;
+            
+            break;
+          case oc_JLE | op_jmp_A:
+            addr_j = (*++ip);
+            addr_j += (*++ip) << 8;
+            if (regs[r_fl] & (flag_z | flag_o))
+                ip = memory + addr_j - 1;
+            
+            break;
+          case oc_JLE | op_jmp_P:
+            addr_p = (*++ip);
+            addr_p += (*++ip) << 8;
+            addr_j = memory[addr_p];
+            addr_j += memory[addr_p + 1] << 8;
+            if (regs[r_fl] & (flag_z | flag_o))
+                ip = memory + addr_j - 1;
+            
+            break;
+          case oc_JGE | op_jmp_A:
+            addr_j = (*++ip);
+            addr_j += (*++ip) << 8;
+            if (!(regs[r_fl] & flag_o))
+                ip = memory + addr_j - 1;
+            
+            break;
+          case oc_JGE | op_jmp_P:
+            addr_p = (*++ip);
+            addr_p += (*++ip) << 8;
+            addr_j = memory[addr_p];
+            addr_j += memory[addr_p + 1] << 8;
+            if (!(regs[r_fl] & flag_o))
+                ip = memory + addr_j - 1;
+            
             break;
             
+          /* --- Output operations --- */
           case 0x40:
             take_address();
             printf("%c", memory[addr_1]);
@@ -535,6 +616,8 @@ int main()
           case 0x43:
             printf("%c", (*++ip));
             break;
+            
+          /* --- Exit and default --- */
           case 0xff:
             return 0;
           default:

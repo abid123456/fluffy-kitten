@@ -17,17 +17,20 @@
 #define a_ptr 2
 #define a_cst 3
 
-#define c_nop  0
-#define c_mov  1
-#define c_movb 2
-#define c_inc  3
-#define c_out  4
-#define c_je   5
-#define c_jne  6
-#define c_exit 7
-
 #define oc_MOV  0x10
 #define oc_MOVB 0x18
+#define oc_SUB  0x30
+#define oc_CMP  0x38
+
+#define oc_JE   0x20
+#define oc_JNE  0x22
+#define oc_JL   0x24
+#define oc_JG   0x26
+#define oc_JLE  0x28
+#define oc_JGE  0x2a
+
+#define op_jmp_A 0x00
+#define op_jmp_P 0x01
 
 #define op28_R_R 0x00
 #define op28_R_I 0x01
@@ -37,6 +40,24 @@
 #define op28_D_R 0x05
 #define op28_R_M 0x06
 #define op28_R_D 0x07
+
+#define c_nop  0
+#define c_inc  1
+#define c_mov  2
+#define c_movb 3
+#define c_sub  4
+#define c_cmp  5
+#define c_je   32
+#define c_jne  34
+#define c_jl   36
+#define c_jg   38
+#define c_jle  40
+#define c_jge  42
+#define c_out  12
+#define c_exit 13
+
+#define c_j_first 32
+#define c_j_last  37
 
 char line[102];
 int line_number;
@@ -381,12 +402,18 @@ int main(int argc, char *argv[])
             
             /* ---------- process operation ---------- */
             if (!strcmp(token, "nop"))  {op_name = c_nop , n_arg = 0;}
+            if (!strcmp(token, "inc"))  {op_name = c_inc , n_arg = 1;}
             if (!strcmp(token, "mov"))  {op_name = c_mov , n_arg = 2;}
             if (!strcmp(token, "movb")) {op_name = c_movb, n_arg = 2;}
-            if (!strcmp(token, "inc"))  {op_name = c_inc , n_arg = 1;}
+            if (!strcmp(token, "sub"))  {op_name = c_sub , n_arg = 2;}
+            if (!strcmp(token, "cmp"))  {op_name = c_cmp , n_arg = 2;}
+            if (!strcmp(token, "je"))   {op_name = c_je  , n_arg = 1;}
+            if (!strcmp(token, "jne"))  {op_name = c_jne , n_arg = 1;}
+            if (!strcmp(token, "jl"))   {op_name = c_jl  , n_arg = 1;}
+            if (!strcmp(token, "jg"))   {op_name = c_jg  , n_arg = 1;}
+            if (!strcmp(token, "jle"))  {op_name = c_jle , n_arg = 1;}
+            if (!strcmp(token, "jge"))  {op_name = c_jge , n_arg = 1;}
             if (!strcmp(token, "out"))  {op_name = c_out , n_arg = 1;}
-            if (!strcmp(token, "je"))   {op_name = c_je  , n_arg = 2;}
-            if (!strcmp(token, "jne"))  {op_name = c_jne , n_arg = 2;}
             if (!strcmp(token, "exit")) {op_name = c_exit, n_arg = 0;}
             
             /* ---------- get arguments from token ---------- */
@@ -498,9 +525,20 @@ int main(int argc, char *argv[])
             if (op_name == c_nop) {
                 disk_file[curr_addr++] = 0x00;
             }
-            /* --- mov operation --- */
-            else if (op_name == c_mov) {
-                disk_file[curr_addr] = oc_MOV;
+            /* --- mov,sub,cmp operation --- */
+            else if (op_name == c_mov || op_name == c_sub ||
+                    op_name == c_cmp) {
+                switch (op_name) {
+                  case c_mov:
+                    disk_file[curr_addr] = oc_MOV;
+                    break;
+                  case c_sub:
+                    disk_file[curr_addr] = oc_SUB;
+                    break;
+                  case c_cmp:
+                    disk_file[curr_addr] = oc_CMP;
+                    break;
+                }
                 switch (arg_1_type) {
                   case a_reg:
                     switch (arg_2_type) {
@@ -687,41 +725,25 @@ int main(int argc, char *argv[])
                     break;
                 }
             }
-            /* --- je operation --- */
-            else if (op_name == c_je) {
+            /* --- jump operations --- */
+            else if (op_name >= c_j_first && op_name <= c_j_last) {
                 switch (arg_1_type) {
                   case a_reg:
-                  case a_cst:
                     error("invalid argument");
                   case a_adr:
+                  case a_cst:
                   case a_ptr:
-                    disk_file[curr_addr++] =
-                        (arg_1_type == a_adr) ? 0x20 : 0x21;
+                    disk_file[curr_addr] = op_name;
+                    printf("arg_1_type:%d\n", arg_1_type);
+                    printf("before:%02x ", disk_file[curr_addr]);
+                    if (arg_1_type == a_ptr) {
+                        disk_file[curr_addr] |= op_jmp_P;
+                    } else disk_file[curr_addr] |= op_jmp_A;
+                    printf("after:%02x\n", disk_file[curr_addr]);
+                    curr_addr++;
                     disk_file[curr_addr++] =
                         arg_1 - ((arg_1 >> 8) << 8);
                     disk_file[curr_addr++] = arg_1 >> 8;
-                    disk_file[curr_addr++] =
-                        arg_2 - ((arg_2 >> 8) << 8);
-                    disk_file[curr_addr++] = arg_2 >> 8;
-                    break;
-                }
-            }
-            /* --- jne operation --- */
-            else if (op_name == c_jne) {
-                switch (arg_1_type) {
-                  case a_reg:
-                  case a_cst:
-                    error("invalid argument");
-                  case a_adr:
-                  case a_ptr:
-                    disk_file[curr_addr++] =
-                        (arg_1_type == a_adr) ? 0x22 : 0x23;
-                    disk_file[curr_addr++] =
-                        arg_1 - ((arg_1 >> 8) << 8);
-                    disk_file[curr_addr++] = arg_1 >> 8;
-                    disk_file[curr_addr++] =
-                        arg_2 - ((arg_2 >> 8) << 8);
-                    disk_file[curr_addr++] = arg_2 >> 8;
                     break;
                 }
             }

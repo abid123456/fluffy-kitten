@@ -16,7 +16,8 @@
     loop1:
         out [ptr1]
         inc ptr1
-    jne [ptr1] loop1
+    cmp [ptr1] 0
+    jne loop1
     out nline
     
     mov ax 15
@@ -30,10 +31,12 @@
             out c_1
             inc c_1
             inc i_2
-        jne i_2 loop3
+        cmp i_2 16
+        jne loop3
         out nline
         inc i_1
-    jne i_1 loop2
+    cmp i_1 16
+    jne loop2
     ; end of main loop
     
     exit
