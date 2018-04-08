@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include "operation.h"
 
 #define s_prog 1
 #define s_data 2
@@ -16,30 +17,6 @@
 #define a_adr 1
 #define a_ptr 2
 #define a_cst 3
-
-#define oc_MOV  0x10
-#define oc_MOVB 0x18
-#define oc_SUB  0x30
-#define oc_CMP  0x38
-
-#define oc_JE   0x20
-#define oc_JNE  0x22
-#define oc_JL   0x24
-#define oc_JG   0x26
-#define oc_JLE  0x28
-#define oc_JGE  0x2a
-
-#define op_jmp_A 0x00
-#define op_jmp_P 0x01
-
-#define op28_R_R 0x00
-#define op28_R_I 0x01
-#define op28_M_I 0x02
-#define op28_D_I 0x03
-#define op28_M_R 0x04
-#define op28_D_R 0x05
-#define op28_R_M 0x06
-#define op28_R_D 0x07
 
 #define c_nop  0
 #define c_inc  1
@@ -689,13 +666,14 @@ int main(int argc, char *argv[])
             }
             /* --- inc operation --- */
             else if (op_name == c_inc) {
+                disk_file[curr_addr] = oc_INC;
                 switch (arg_1_type) {
                   case a_reg:
                     error("invalid argument");
                   case a_adr:
                   case a_ptr:
-                    disk_file[curr_addr++] =
-                        (arg_1_type == a_adr) ? 0x0a : 0x0b;
+                    disk_file[curr_addr++] |=
+                        (arg_1_type == a_adr) ? op12_M : op12_D;
                     disk_file[curr_addr++] =
                         arg_1 - ((arg_1 >> 8) << 8);
                     disk_file[curr_addr++] = arg_1 >> 8;
@@ -706,21 +684,22 @@ int main(int argc, char *argv[])
             }
             /* --- out operation --- */
             else if (op_name == c_out) {
+                disk_file[curr_addr] = oc_OUT;
                 switch (arg_1_type) {
                   case a_reg:
-                    disk_file[curr_addr++] = 0x42;
+                    disk_file[curr_addr++] |= op14_R;
                     disk_file[curr_addr++] = arg_1;
                     break;
                   case a_adr:
                   case a_ptr:
-                    disk_file[curr_addr++] =
-                        (arg_1_type == a_adr) ? 0x40 : 0x41;
+                    disk_file[curr_addr++] |=
+                        (arg_1_type == a_adr) ? op14_M : op14_D;
                     disk_file[curr_addr++] =
                         arg_1 - ((arg_1 >> 8) << 8);
                     disk_file[curr_addr++] = arg_1 >> 8;
                     break;
                   case a_cst:
-                    disk_file[curr_addr++] = 0x43;
+                    disk_file[curr_addr++] = op14_I;
                     disk_file[curr_addr++] = arg_1;
                     break;
                 }

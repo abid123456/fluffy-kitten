@@ -15,8 +15,9 @@
     mov ptr1 bx
     loop1:
         out [ptr1]
-        inc ptr1
-    cmp [ptr1] 0
+        sub ptr1 3
+        sub ptr1 65532
+     cmp [ptr1] 0
     jne loop1
     out nline
     
@@ -31,11 +32,11 @@
             out c_1
             inc c_1
             inc i_2
-        cmp i_2 16
+         cmp i_2 16
         jne loop3
         out nline
         inc i_1
-    cmp i_1 16
+     cmp i_1 32
     jne loop2
     ; end of main loop
     

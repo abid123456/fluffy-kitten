@@ -1,32 +1,9 @@
 #include <stdio.h>
 #include <conio.h>
+#include "operation.h"
 
 #define mem_size 65536
 /** #define debug /**/
-
-#define oc_MOV  0x10
-#define oc_MOVB 0x18
-#define oc_SUB  0x30
-#define oc_CMP  0x38
-
-#define oc_JE   0x20
-#define oc_JNE  0x22
-#define oc_JL   0x24
-#define oc_JG   0x26
-#define oc_JLE  0x28
-#define oc_JGE  0x2a
-
-#define op_jmp_A 0x00
-#define op_jmp_P 0x01
-
-#define op28_R_R 0x00
-#define op28_R_I 0x01
-#define op28_M_I 0x02
-#define op28_D_I 0x03
-#define op28_M_R 0x04
-#define op28_D_R 0x05
-#define op28_R_M 0x06
-#define op28_R_D 0x07
 
 unsigned char memory[mem_size];
 unsigned char regs[16];
@@ -110,19 +87,47 @@ int main()
         }
         /**/
         #endif
+        /* ==================== Start of main switch ===================== */
         switch(*ip) {
           case 0x00:
             break;
-          case 0x0a:
+          /* ----------------------- INC operation ----------------------- */
+          case oc_INC | op12_M:
             take_address();
             memory[addr_1]++;
+            if (memory[addr_1] == 0) {
+                memory[++addr_1]++;
+                if (memory[addr_1] == 0) {
+                    regs[r_fl] |= flag_o;
+                    regs[r_fl] |= flag_z;
+                } else {
+                    regs[r_fl] &= (~flag_o);
+                    regs[r_fl] &= (~flag_z);
+                }
+            } else {
+                regs[r_fl] &= (~flag_o);
+                regs[r_fl] &= (~flag_z);
+            }
             break;
-          case 0x0b:
+          case oc_INC | op12_D:
             take_pointer();
             memory[addr_1]++;
+            if (memory[addr_1] == 0) {
+                memory[++addr_1]++;
+                if (memory[addr_1] == 0) {
+                    regs[r_fl] |= flag_o;
+                    regs[r_fl] |= flag_z;
+                } else {
+                    regs[r_fl] &= (~flag_o);
+                    regs[r_fl] &= (~flag_z);
+                }
+            } else {
+                regs[r_fl] &= (~flag_o);
+                regs[r_fl] &= (~flag_z);
+            }
             break;
             
-          /* --- MOV operation --- */
+          /* ----------------------- MOV operation ----------------------- */
           case oc_MOV | op28_R_R:
             addr_r = (*++ip);
             addr_r_2 = (*++ip);
@@ -169,7 +174,7 @@ int main()
             regs[addr_r] = memory[addr_1];
             break;
             
-          /* --- MOVB operation --- */
+          /* ---------------------- MOVB operation ----------------------- */
           case oc_MOVB | op28_R_R:
             addr_r = (*++ip);
             addr_r_2 = (*++ip);
@@ -208,7 +213,7 @@ int main()
             regs[addr_r] = memory[addr_1];
             break;
             
-          /* --- SUB operation --- */
+          /* ----------------------- SUB operation ----------------------- */
           case oc_SUB | op28_R_R:
             addr_r = (*++ip);
             addr_r_2 = (*++ip);
@@ -359,7 +364,7 @@ int main()
             }
             break;
             
-           /* --- CMP operation --- */
+           /* ---------------------- CMP operation ----------------------- */
           case oc_CMP | op28_R_R:
             addr_r = (*++ip);
             addr_r_2 = (*++ip);
@@ -502,7 +507,7 @@ int main()
             }
             break;
             
-          /* --- Jump operations --- */
+          /* ---------------------- Jump operations ---------------------- */
           case oc_JE | op_jmp_A:
             addr_j = (*++ip);
             addr_j += (*++ip) << 8;
@@ -600,30 +605,31 @@ int main()
             
             break;
             
-          /* --- Output operations --- */
-          case 0x40:
+          /* --------------------- Output operations --------------------- */
+          case oc_OUT | op14_M:
             take_address();
             printf("%c", memory[addr_1]);
             break;
-          case 0x41:
+          case oc_OUT | op14_D:
             take_pointer();
             printf("%c", memory[addr_1]);
             break;
-          case 0x42:
+          case oc_OUT | op14_R:
             addr_r = (*++ip);
             printf("%c", regs[addr_r]);
             break;
-          case 0x43:
+          case oc_OUT | op14_I:
             printf("%c", (*++ip));
             break;
             
-          /* --- Exit and default --- */
+          /* --------------------- Exit and default ---------------------- */
           case 0xff:
             return 0;
           default:
             puts("unassigned opcode");
             break;
         }
+        /* ===================== End of main switch ====================== */
         ip++;
         #ifdef debug
         /**/printf(",%02x,%02x,%02x\n",
