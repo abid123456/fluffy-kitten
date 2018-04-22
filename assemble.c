@@ -24,6 +24,8 @@
 #define c_movb 3
 #define c_sub  4
 #define c_cmp  5
+#define c_add  6
+#define c_addc 7
 #define c_je   32
 #define c_jne  34
 #define c_jl   36
@@ -67,7 +69,8 @@ const int num_registers = sizeof (registers) / sizeof *registers;
 
 void error(const char *str)
 {
-    printf("Error : %s (at line %d).\n", str, line_number);
+    puts("An error occured.");
+    fprintf(stderr, "Error : %s (at line %d).\n", str, line_number);
     exit(-1);
 }
 
@@ -379,19 +382,21 @@ int main(int argc, char *argv[])
             
             /* ---------- process operation ---------- */
             if (!strcmp(token, "nop"))  {op_name = c_nop , n_arg = 0;}
-            if (!strcmp(token, "inc"))  {op_name = c_inc , n_arg = 1;}
-            if (!strcmp(token, "mov"))  {op_name = c_mov , n_arg = 2;}
-            if (!strcmp(token, "movb")) {op_name = c_movb, n_arg = 2;}
-            if (!strcmp(token, "sub"))  {op_name = c_sub , n_arg = 2;}
-            if (!strcmp(token, "cmp"))  {op_name = c_cmp , n_arg = 2;}
-            if (!strcmp(token, "je"))   {op_name = c_je  , n_arg = 1;}
-            if (!strcmp(token, "jne"))  {op_name = c_jne , n_arg = 1;}
-            if (!strcmp(token, "jl"))   {op_name = c_jl  , n_arg = 1;}
-            if (!strcmp(token, "jg"))   {op_name = c_jg  , n_arg = 1;}
-            if (!strcmp(token, "jle"))  {op_name = c_jle , n_arg = 1;}
-            if (!strcmp(token, "jge"))  {op_name = c_jge , n_arg = 1;}
-            if (!strcmp(token, "out"))  {op_name = c_out , n_arg = 1;}
-            if (!strcmp(token, "exit")) {op_name = c_exit, n_arg = 0;}
+            else if (!strcmp(token, "inc"))  {op_name = c_inc , n_arg = 1;}
+            else if (!strcmp(token, "mov"))  {op_name = c_mov , n_arg = 2;}
+            else if (!strcmp(token, "movb")) {op_name = c_movb, n_arg = 2;}
+            else if (!strcmp(token, "sub"))  {op_name = c_sub , n_arg = 2;}
+            else if (!strcmp(token, "cmp"))  {op_name = c_cmp , n_arg = 2;}
+            else if (!strcmp(token, "add"))  {op_name = c_add , n_arg = 2;}
+            else if (!strcmp(token, "addc")) {op_name = c_addc, n_arg = 2;}
+            else if (!strcmp(token, "je"))   {op_name = c_je  , n_arg = 1;}
+            else if (!strcmp(token, "jne"))  {op_name = c_jne , n_arg = 1;}
+            else if (!strcmp(token, "jl"))   {op_name = c_jl  , n_arg = 1;}
+            else if (!strcmp(token, "jg"))   {op_name = c_jg  , n_arg = 1;}
+            else if (!strcmp(token, "jle"))  {op_name = c_jle , n_arg = 1;}
+            else if (!strcmp(token, "jge"))  {op_name = c_jge , n_arg = 1;}
+            else if (!strcmp(token, "out"))  {op_name = c_out , n_arg = 1;}
+            else if (!strcmp(token, "exit")) {op_name = c_exit, n_arg = 0;}
             
             /* ---------- get arguments from token ---------- */
             for (i_arg = 0; i_arg < n_arg; i_arg++) {
@@ -503,8 +508,8 @@ int main(int argc, char *argv[])
                 disk_file[curr_addr++] = 0x00;
             }
             /* --- mov,sub,cmp operation --- */
-            else if (op_name == c_mov || op_name == c_sub ||
-                    op_name == c_cmp) {
+            else if (op_name == c_mov || op_name == c_sub || op_name == c_cmp
+                    || op_name == c_add || op_name == c_addc) {
                 switch (op_name) {
                   case c_mov:
                     disk_file[curr_addr] = oc_MOV;
@@ -514,6 +519,12 @@ int main(int argc, char *argv[])
                     break;
                   case c_cmp:
                     disk_file[curr_addr] = oc_CMP;
+                    break;
+                  case c_add:
+                    disk_file[curr_addr] = oc_ADD;
+                    break;
+                  case c_addc:
+                    disk_file[curr_addr] = oc_ADDC;
                     break;
                 }
                 switch (arg_1_type) {
@@ -745,5 +756,6 @@ int main(int argc, char *argv[])
         fwrite(disk_file + i, sizeof *disk_file, 1, fp);
     }
     fclose(fp);
+    puts("Assembly successfully completed.");
     return 0;
 }

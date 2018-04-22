@@ -29,6 +29,7 @@ unsigned short addr_1, addr_2, addr_r, addr_r_2, addr_j, addr_p;
 
 #define flag_o 0x01
 #define flag_z 0x02
+#define flag_c 0x04
 
 void take_pointer()
 {
@@ -364,7 +365,7 @@ int main()
             }
             break;
             
-           /* ---------------------- CMP operation ----------------------- */
+          /* ---------------------- CMP operation ----------------------- */
           case oc_CMP | op28_R_R:
             addr_r = (*++ip);
             addr_r_2 = (*++ip);
@@ -504,6 +505,228 @@ int main()
                 
                 if (regs[addr_r] < memory[addr_1]) regs[r_fl] |= flag_o;
                 else regs[r_fl] &= (~flag_o);
+            }
+            break;
+            
+          /* ----------------------- ADD operation ----------------------- */
+          case oc_ADD | op28_R_R:
+            addr_r = (*++ip);
+            addr_r_2 = (*++ip);
+            regs[addr_r] += regs[addr_r_2];
+            if (regs[addr_r++] < regs[addr_r_2++]) {
+                regs[addr_r] += regs[addr_r_2] + 1;
+                if (regs[addr_r] <= regs[addr_r_2])
+                    regs[r_fl] |= flag_c;
+            } else {
+                regs[addr_r] += regs[addr_r_2];
+                if (regs[addr_r] < regs[addr_r_2])
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADD | op28_R_I:
+            addr_r = (*++ip);
+            regs[addr_r] += (*++ip);
+            if (regs[addr_r++] < *(ip++)) {
+                regs[addr_r] += *ip + 1;
+                if (regs[addr_r] <= *ip)
+                    regs[r_fl] |= flag_c;
+            } else {
+                regs[addr_r] += *ip;
+                if (regs[addr_r] < *ip)
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADD | op28_M_I:
+            take_address();
+            memory[addr_1] += (*++ip);
+            if (memory[addr_1++] < *(ip++)) {
+                memory[addr_1] += *ip + 1;
+                if (memory[addr_1] <= *ip)
+                    regs[r_fl] |= flag_c;
+            } else {
+                memory[addr_1] += *ip;
+                if (memory[addr_1] < *ip)
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADD | op28_D_I:
+            take_pointer();
+            memory[addr_1] += (*++ip);
+            if (memory[addr_1++] < *(ip++)) {
+                memory[addr_1] += *ip + 1;
+                if (memory[addr_1] <= *ip)
+                    regs[r_fl] |= flag_c;
+            } else {
+                memory[addr_1] += *ip;
+                if (memory[addr_1] < *ip)
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADD | op28_M_R:
+            take_address();
+            addr_r = (*++ip);
+            memory[addr_1] += regs[addr_r];
+            if (memory[addr_1++] < regs[addr_r++]) {
+                memory[addr_1] += regs[addr_r] + 1;
+                if (memory[addr_1] <= regs[addr_r])
+                    regs[r_fl] |= flag_c;
+            } else {
+                memory[addr_1] += regs[addr_r];
+                if (memory[addr_1] < regs[addr_r])
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADD | op28_D_R:
+            take_pointer();
+            addr_r = (*++ip);
+            memory[addr_1] += regs[addr_r];
+            if (memory[addr_1++] < regs[addr_r++]) {
+                memory[addr_1] += regs[addr_r] + 1;
+                if (memory[addr_1] <= regs[addr_r])
+                    regs[r_fl] |= flag_c;
+            } else {
+                memory[addr_1] += regs[addr_r];
+                if (memory[addr_1] < regs[addr_r])
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADD | op28_R_M:
+            take_address();
+            addr_r = (*++ip);
+            regs[addr_r] += memory[addr_1];
+            if (regs[addr_r++] < memory[addr_1++]) {
+                regs[addr_r] += memory[addr_1] + 1;
+                if (regs[addr_r] <= memory[addr_1])
+                    regs[r_fl] |= flag_c;
+            } else {
+                regs[addr_r] += memory[addr_1];
+                if (regs[addr_r] < memory[addr_1])
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADD | op28_R_D:
+            take_pointer();
+            addr_r = (*++ip);
+            regs[addr_r] += memory[addr_1];
+            if (regs[addr_r++] < memory[addr_1++]) {
+                regs[addr_r] += memory[addr_1] + 1;
+                if (regs[addr_r] <= memory[addr_1])
+                    regs[r_fl] |= flag_c;
+            } else {
+                regs[addr_r] += memory[addr_1];
+                if (regs[addr_r] < memory[addr_1])
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+            
+          /* ----------------------- ADDC operation ----------------------- */
+          case oc_ADDC | op28_R_R:
+            addr_r = (*++ip);
+            addr_r_2 = (*++ip);
+            regs[addr_r] += regs[addr_r_2] + 1;
+            if (regs[addr_r++] <= regs[addr_r_2++]) {
+                regs[addr_r] += regs[addr_r_2] + 1;
+                if (regs[addr_r] <= regs[addr_r_2])
+                    regs[r_fl] |= flag_c;
+            } else {
+                regs[addr_r] += regs[addr_r_2];
+                if (regs[addr_r] < regs[addr_r_2])
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADDC | op28_R_I:
+            addr_r = (*++ip);
+            regs[addr_r] += (*++ip) + 1;
+            if (regs[addr_r++] <= *(ip++)) {
+                regs[addr_r] += *ip + 1;
+                if (regs[addr_r] <= *ip)
+                    regs[r_fl] |= flag_c;
+            } else {
+                regs[addr_r] += *ip;
+                if (regs[addr_r] < *ip)
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADDC | op28_M_I:
+            take_address();
+            memory[addr_1] += (*++ip) + 1;
+            if (memory[addr_1++] <= *(ip++)) {
+                memory[addr_1] += *ip + 1;
+                if (memory[addr_1] <= *ip)
+                    regs[r_fl] |= flag_c;
+            } else {
+                memory[addr_1] += *ip;
+                if (memory[addr_1] < *ip)
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADDC | op28_D_I:
+            take_pointer();
+            memory[addr_1] += (*++ip) + 1;
+            if (memory[addr_1++] <= *(ip++)) {
+                memory[addr_1] += *ip + 1;
+                if (memory[addr_1] <= *ip)
+                    regs[r_fl] |= flag_c;
+            } else {
+                memory[addr_1] += *ip;
+                if (memory[addr_1] < *ip)
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADDC | op28_M_R:
+            take_address();
+            addr_r = (*++ip);
+            memory[addr_1] += regs[addr_r] + 1;
+            if (memory[addr_1++] <= regs[addr_r++]) {
+                memory[addr_1] += regs[addr_r] + 1;
+                if (memory[addr_1] <= regs[addr_r])
+                    regs[r_fl] |= flag_c;
+            } else {
+                memory[addr_1] += regs[addr_r];
+                if (memory[addr_1] < regs[addr_r])
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADDC | op28_D_R:
+            take_pointer();
+            addr_r = (*++ip);
+            memory[addr_1] += regs[addr_r] + 1;
+            if (memory[addr_1++] <= regs[addr_r++]) {
+                memory[addr_1] += regs[addr_r] + 1;
+                if (memory[addr_1] <= regs[addr_r])
+                    regs[r_fl] |= flag_c;
+            } else {
+                memory[addr_1] += regs[addr_r];
+                if (memory[addr_1] < regs[addr_r])
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADDC | op28_R_M:
+            take_address();
+            addr_r = (*++ip);
+            regs[addr_r] += memory[addr_1] + 1;
+            if (regs[addr_r++] <= memory[addr_1++]) {
+                regs[addr_r] += memory[addr_1] + 1;
+                if (regs[addr_r] <= memory[addr_1])
+                    regs[r_fl] |= flag_c;
+            } else {
+                regs[addr_r] += memory[addr_1];
+                if (regs[addr_r] < memory[addr_1])
+                    regs[r_fl] |= flag_c;
+            }
+            break;
+          case oc_ADDC | op28_R_D:
+            take_pointer();
+            addr_r = (*++ip);
+            regs[addr_r] += memory[addr_1] + 1;
+            if (regs[addr_r++] <= memory[addr_1++]) {
+                regs[addr_r] += memory[addr_1] + 1;
+                if (regs[addr_r] <= memory[addr_1])
+                    regs[r_fl] |= flag_c;
+            } else {
+                regs[addr_r] += memory[addr_1];
+                if (regs[addr_r] < memory[addr_1])
+                    regs[r_fl] |= flag_c;
             }
             break;
             

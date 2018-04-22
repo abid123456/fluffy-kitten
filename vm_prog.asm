@@ -15,8 +15,7 @@
     mov ptr1 bx
     loop1:
         out [ptr1]
-        sub ptr1 3
-        sub ptr1 65532
+        add ptr1 1
      cmp [ptr1] 0
     jne loop1
     out nline

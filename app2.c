@@ -6,7 +6,8 @@
 /* -------------------------- macro definitions -------------------------- */
 
 #define NOTHING_SPECIAL 0x20
-#define SPC_RIGHT       0x21
+#define SPC_OVERWRITE   0x21
+#define SPC_RIGHT       0x0b
 #define SPC_DOWN        0x10
 #define SPC_UP          0x11
 #define SPC_LEFT        0x02
@@ -18,10 +19,11 @@
 #define SPC_ESC         0x08
 #define SPC_CTRL        0x09
 #define SPC_PRESSED     0x40
-#define CTRL            0x01
+#define SPC_INSERT      0x0a
+#define CONTROL         0x01
 
 #define SPC_VERTICAL    0x10
-#define SPC_RIGHT_OR_NS 0x20
+#define K_SPC_TYPING    0x20
 
 #define F_BLUE          FOREGROUND_BLUE
 #define F_GREEN         FOREGROUND_GREEN
@@ -37,6 +39,7 @@
 #define B_WHITE         B_BLUE | B_GREEN | B_RED | B_INTENSITY
 #define F_WHITE         F_BLUE | F_GREEN | F_RED | F_INTENSITY
 #define B_DARK_GREY     B_INTENSITY
+#define F_DARK_GREY     F_INTENSITY
 
 #define SCR_W           80
 #define SCR_H           25
@@ -60,6 +63,13 @@ coord c(short x, short y)
     return c;
 }
 
+int c_c(coord c_1, coord c_2)
+{
+    if (c_1.x != c_2.x) return 0;
+    if (c_1.y != c_2.y) return 0;
+    return 1;
+}
+
 
 typedef struct {
     char spc;
@@ -75,6 +85,8 @@ typedef struct {
 typedef struct {
     int op_id;
     coord c;
+    coord c_end;
+    coord c_inv_end;
 } operation;
 
 
@@ -94,8 +106,12 @@ struct tf_handle {
     int u_counter;
     int r_counter;
     operation u_stack[undo_limit];
+    operation r_stack[undo_limit];
     int u_first;
     int u_limiter;
+    int r_first;
+    int r_limiter;
+    int insert_mode;
 };
 
 /* ------------------------ function declarations ------------------------ */
@@ -112,8 +128,10 @@ void dtfield(struct tfield *tf);
 
 void ftfield(struct tfield *tf);
 int  operate(struct tfield *tf, struct tf_handle *h, operation o);
+operation make_op(int op_id, coord c_inv_end, coord c);
 
 int  insert_char(struct tfield *tf, struct tf_handle *h, char c);
+int  overwrite_char(struct tfield *tf, struct tf_handle *h, char c);
 int  delete(struct tfield *tf, struct tf_handle *h);
 int  add_newline(struct tfield *tf, struct tf_handle *h);
 void shift_down(struct tfield *tf, short top, short bottom, short *len);
@@ -152,6 +170,8 @@ const char str_unsaved[2] = {(char) 193, '\0'};
 const char right_arrow = 26;
 const char left_arrow = 27;
 int undoing = 0;
+
+const coord origin = {.x = 0, .y = 0};
 
 /* ----------------------------------------------------------------------- */
 /* ------------------------ function definitions ------------------------- */
@@ -389,8 +409,9 @@ void ftfield(struct tfield *tf)
     int iy;
     operation o;
     key k;
-    char u_display[6];
+    char u_display[6], str[100];
     int k_c_ns, h_r_counter_temp;
+    coord c_inv_end_del;
     
     /* init some variables */
     n = tf -> width + 1;
@@ -408,6 +429,11 @@ void ftfield(struct tfield *tf)
     h.r_counter = 0;
     h.u_first = 0;
     h.u_limiter = 0;
+    
+    h.insert_mode = 1;
+    /* sprintf(str, "h.insert_mode=%d", h.insert_mode); */
+    
+    c_inv_end_del = origin;
     
     /* init len members and maxy */
     h.maxy = -1;
@@ -466,19 +492,23 @@ void ftfield(struct tfield *tf)
               case 25: /* if redoing */
                 if (!h.r_counter) break;
                 h_r_counter_temp = h.r_counter - 1;
-                if (h.u_stack[h.u_limiter].op_id & 0xff == NOTHING_SPECIAL)
+                /* sprintf(str, "redo op_id=%04x",
+                        h.u_stack[h.u_limiter].op_id); */
+                s_pstrat(str, c(40, 1));
+                if ((h.u_stack[h.u_limiter].op_id & 0xff) & K_SPC_TYPING)
                     k_c_ns = -1;
                 operate(tf, &h, h.u_stack[h.u_limiter]);
                 h.r_counter = h_r_counter_temp;
+                if (k_c_ns == -1) goto move_right;
                 break;
               default:
                 k_c_ns = 1;
                 break;
             }
             if (!k_c_ns) break;
-            if (k_c_ns == -1) goto move_right;
-            o.op_id = k.spc + 0x100 * (unsigned char) k.c;
-            o.c = h.r;
+            if (!h.insert_mode && (h.r.x != h.len[h.r.y] || h.r.y != h.eocp))
+                k.spc = SPC_OVERWRITE;
+            o = make_op(k.spc + 0x100 * (unsigned char) k.c, h.r, h.r);
             if (operate(tf, &h, o) != 0) break;
             mark_unsaved();
            move_right:
@@ -490,15 +520,25 @@ void ftfield(struct tfield *tf)
           case SPC_UP:
           case SPC_HOME:
           case SPC_END:
-            if (move_cursor(tf, &h, k.spc) != 0) break;
+            if (k.spc == SPC_BACK) c_inv_end_del = h.r;
+            if (move_cursor(tf, &h, k.spc) != 0) {
+                if (k.spc == SPC_BACK) c_inv_end_del = origin;
+                break;
+            }
             if (k.spc != SPC_BACK) break;
             k.spc = SPC_DEL;
           case SPC_DEL:
           case SPC_ENTER:
-            o.op_id = k.spc;
-            o.c = h.r;
+            if (c_c(c_inv_end_del, origin)) c_inv_end_del = h.r;
+            o = make_op(k.spc, c_inv_end_del, h.r);
+            c_inv_end_del = origin;
             operate(tf, &h, o);
             mark_unsaved();
+            break;
+          case SPC_INSERT:
+            h.insert_mode = h.insert_mode ? 0 : 1;
+            /* sprintf(str, "h.insert_mode=%d", h.insert_mode); */
+            s_pstrat(str, c(60, 1));
             break;
           case SPC_ESC:
             switch (saved) {
@@ -514,7 +554,7 @@ void ftfield(struct tfield *tf)
     return;
 }
 
-/* ------------------------ ftfield subfunctions ------------------------- */
+/* ------------------------- operation functions ------------------------- */
 
 int operate(struct tfield *tf, struct tf_handle *h, operation o)
 {
@@ -525,29 +565,55 @@ int operate(struct tfield *tf, struct tf_handle *h, operation o)
     h -> r = o.c;
     h -> eocp = h -> r.y;
     adjust_eocp(tf, h);
-    /**/
-    sprintf(str, "(%d,%d),e=%d          ",
-    h -> r.x, h -> r.y, h -> eocp);
-    s_pstrat(str, c(15,0)); /**/
+    /**
+    sprintf(str, "(%2d,%2d),e=%d;op_id=%04x,"
+    "coords:(%2d,%2d)(%2d,%2d)(%2d,%2d);uc=%d]   ",
+    h -> r.x, h -> r.y, h -> eocp, o.op_id, o.c_inv_end.x, o.c_inv_end.y,
+    o.c.x, o.c.y, o.c_end.x, o.c_end.y, h -> u_counter);
+    s_pstrat(str, c(15, 0)); /**/
     switch (o.op_id & 0xff) {
       case NOTHING_SPECIAL:
         o.op_id >>= 8;
-        /**/ sprintf(str, "%d   ", o.op_id);
-        s_pstrat(str, c(0,0)); /**/
+        /** sprintf(str, "%d   ", o.op_id);
+        s_pstrat(str, origin); /**/
+        
         if ((r = insert_char(tf, h, (char) o.op_id)) < 0) return r;
-        o_inverse.c = o.c;
-        o_inverse.op_id = SPC_DEL;
+        if (!c_c(o.c_end, origin)) h -> r = o.c_end;
+        else o.c_end = h -> r;
+        
+        o_inverse = make_op(SPC_DEL, o.c_end, o.c);
+        o_inverse.c_end = o.c_inv_end;
+        break;
+      case SPC_OVERWRITE:
+        o.op_id >>= 8;
+        /** sprintf(str, "%d   ", o.op_id);
+        s_pstrat(str, origin); /**/
+        
+        if (((r = overwrite_char(tf, h, (char) o.op_id)) & 0xff) < 0)
+            return r & 0xff;
+        if (!c_c(o.c_end, origin)) h -> r = o.c_end;
+        else o.c_end = h -> r;
+        
+        o_inverse = make_op(SPC_OVERWRITE + r, o.c_end, o.c);
+        o_inverse.c_end = o.c_inv_end;
         break;
       case SPC_DEL:
         if ((r = delete(tf, h)) < 0) return r;
-        o_inverse.c = h -> r;
-        o_inverse.op_id = r == 0xffff ?
-                        SPC_ENTER : (NOTHING_SPECIAL + 0x100 * r);
+        if (!c_c(o.c_end, origin)) h -> r = o.c_end;
+        else o.c_end = h -> r;
+        
+        o_inverse = make_op(r == 0xffff ?
+                            SPC_ENTER : (NOTHING_SPECIAL + 0x100 * r),
+                            o.c_end, h -> r);
+        o_inverse.c_end = o.c_inv_end;
         break;
       case SPC_ENTER:
         if ((r = add_newline(tf, h)) < 0) return r;
-        o_inverse.c = o.c;
-        o_inverse.op_id = SPC_DEL;
+        if (!c_c(o.c_end, origin)) h -> r = o.c_end;
+        else o.c_end = h -> r;
+        
+        o_inverse = make_op(SPC_DEL, o.c_end, o.c);
+        o_inverse.c_end = o.c_inv_end;
         break;
     }
     
@@ -561,6 +627,20 @@ int operate(struct tfield *tf, struct tf_handle *h, operation o)
     
     return 0;
 }
+
+operation make_op(int op_id, coord c_inv_end, coord c)
+{
+    operation r;
+    
+    r.op_id     = op_id;
+    r.c_inv_end = c_inv_end;
+    r.c         = c;
+    r.c_end     = origin;
+    
+    return r;
+}
+
+/* ------------------------ ftfield subfunctions ------------------------- */
 
 int insert_char(struct tfield *tf, struct tf_handle *h, char c)
 {
@@ -601,6 +681,17 @@ int insert_char(struct tfield *tf, struct tf_handle *h, char c)
     for (iy = h -> r.y; iy <= h -> eocp; iy++) h -> changed[iy] = 1;
     
     return 0;
+}
+
+int overwrite_char(struct tfield *tf, struct tf_handle *h, char c)
+{
+    int r;
+    
+    r = tf -> line[h -> r.y][h -> r.x];
+    tf -> line[h -> r.y][h -> r.x] = c;
+    h -> changed[h -> r.y] = 1;
+    
+    return 0 + 0x100 * r;
 }
 
 int delete(struct tfield *tf, struct tf_handle *h)
@@ -814,7 +905,7 @@ int move_cursor(struct tfield *tf, struct tf_handle *h, char d)
       case SPC_DOWN:
         if (h -> r.y == h -> maxy) return -1;
         if (tf -> line[h -> r.y++][n]) h -> eocp++;
-        if (d & SPC_RIGHT_OR_NS) goto cr;
+        if (d == SPC_RIGHT) goto cr;
         goto check_x_coord;
       case SPC_LEFT:
       case SPC_BACK:
@@ -960,7 +1051,7 @@ void s_prepare()
     
     for (i = 0; i < 50; i++) {
         sci[i].Char.AsciiChar = 232;
-        sci[i].Attributes = B_WHITE | F_BLACK;
+        sci[i].Attributes = B_WHITE | F_GREY;
     }
     ssr = s_sr(39, 3, 39, 21);
     WriteConsoleOutput(s_h_out, sci, s_c(1, 19), s_c(0, 0), &ssr);
@@ -971,17 +1062,18 @@ void s_prepare()
 key s_read_key()
 {
     const short corr_arr[][2] = {
-        {VK_RIGHT   , SPC_RIGHT },
-        {VK_DOWN    , SPC_DOWN  },
-        {VK_UP      , SPC_UP    },
-        {VK_LEFT    , SPC_LEFT  },
-        {VK_BACK    , SPC_BACK  },
-        {VK_END     , SPC_END   },
-        {VK_DELETE  , SPC_DEL   },
-        {VK_RETURN  , SPC_ENTER },
-        {VK_HOME    , SPC_HOME  },
-        {VK_ESCAPE  , SPC_ESC   },
-        {VK_CONTROL , SPC_CTRL  }
+        {VK_RIGHT   , SPC_RIGHT  },
+        {VK_DOWN    , SPC_DOWN   },
+        {VK_UP      , SPC_UP     },
+        {VK_LEFT    , SPC_LEFT   },
+        {VK_BACK    , SPC_BACK   },
+        {VK_END     , SPC_END    },
+        {VK_DELETE  , SPC_DEL    },
+        {VK_RETURN  , SPC_ENTER  },
+        {VK_HOME    , SPC_HOME   },
+        {VK_ESCAPE  , SPC_ESC    },
+        {VK_CONTROL , SPC_CTRL   },
+        {VK_INSERT  , SPC_INSERT }
     };
     INPUT_RECORD ir;
     DWORD d;
@@ -1008,7 +1100,7 @@ key s_read_key()
         }
         /*if (ir.Event.KeyEvent.dwControlKeyState &
             (RIGHT_CTRL_PRESSED | LEFT_CTRL_PRESSED)) {
-            k.spc = SPC_PRESSED|CTRL;
+            k.spc = SPC_PRESSED|CONTROL;
         }*/
         k.spc = NOTHING_SPECIAL;
         return k;
